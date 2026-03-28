@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from src.environment.actions import ActionType
 from src.environment.env import SREEnvironment
@@ -22,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TrajectoryStep:
     """A single step in an episode trajectory."""
+
     observation: str
     action_type: str
     target_service: str
@@ -32,6 +35,7 @@ class TrajectoryStep:
 @dataclass
 class EpisodeResult:
     """Collected trajectory from a single episode."""
+
     scenario_id: str
     scenario_name: str
     seed: int
@@ -47,6 +51,7 @@ class EpisodeResult:
 @dataclass
 class TrainingStats:
     """Aggregate statistics across episodes."""
+
     episodes_run: int = 0
     total_reward: float = 0.0
     rewards_by_scenario: dict[str, list[float]] = field(default_factory=dict)
@@ -73,16 +78,20 @@ class EpisodeRunner:
       - Later training: all scenarios including hard ones
     """
 
-    def __init__(self, scenarios_dir: str | None = None,
-                 max_difficulty: float | None = None,
-                 scenarios: list[ScenarioDefinition] | None = None,
-                 incident_db_path: str | None = None):
+    def __init__(
+        self,
+        scenarios_dir: str | None = None,
+        max_difficulty: float | None = None,
+        scenarios: list[ScenarioDefinition] | None = None,
+        incident_db_path: str | None = None,
+    ):
         loader = ScenarioLoader(scenarios_dir) if scenarios_dir else ScenarioLoader()
         if scenarios is not None:
             self._scenarios = scenarios + loader.load_all()
         elif incident_db_path is not None:
             from src.crawler.repository.sqlite_repository import SqliteIncidentRepository
             from src.crawler.scenario_generator import ScenarioGenerator
+
             repo = SqliteIncidentRepository(incident_db_path)
             try:
                 incidents = repo.load_all()
@@ -100,8 +109,9 @@ class EpisodeRunner:
             raise ValueError("No scenarios found")
         self._rng = random.Random()
         self._stats = TrainingStats()
-        logger.info("EpisodeRunner initialised with %d scenarios (max_difficulty=%s)",
-                     len(self._scenarios), max_difficulty)
+        logger.info(
+            "EpisodeRunner initialised with %d scenarios (max_difficulty=%s)", len(self._scenarios), max_difficulty
+        )
 
     @property
     def stats(self) -> TrainingStats:
@@ -115,9 +125,12 @@ class EpisodeRunner:
         """Sample a random scenario from the available pool."""
         return self._rng.choice(self._scenarios)
 
-    def run_episode(self, scenario: ScenarioDefinition | None = None,
-                    seed: int | None = None,
-                    agent_fn: callable | None = None) -> EpisodeResult:
+    def run_episode(
+        self,
+        scenario: ScenarioDefinition | None = None,
+        seed: int | None = None,
+        agent_fn: Callable[..., Any] | None = None,
+    ) -> EpisodeResult:
         """Run a single episode and collect the full trajectory.
 
         The trajectory contains every (observation, action, reward) step,
@@ -148,13 +161,15 @@ class EpisodeRunner:
             obs, reward, terminated, truncated, info = env.step(action)
             step += 1
 
-            trajectory.append(TrajectoryStep(
-                observation=prev_obs_text,
-                action_type=action_type,
-                target_service=target_service,
-                reward=reward if (terminated or truncated) else 0.0,
-                done=terminated or truncated,
-            ))
+            trajectory.append(
+                TrajectoryStep(
+                    observation=prev_obs_text,
+                    action_type=action_type,
+                    target_service=target_service,
+                    reward=reward if (terminated or truncated) else 0.0,
+                    done=terminated or truncated,
+                )
+            )
 
         bd = info.get("reward_breakdown")
         result = EpisodeResult(
@@ -173,27 +188,40 @@ class EpisodeRunner:
         env.close()
         return result
 
-    def run_batch(self, num_episodes: int, agent_fn: callable | None = None) -> list[EpisodeResult]:
+    def run_batch(self, num_episodes: int, agent_fn: Callable[..., Any] | None = None) -> list[EpisodeResult]:
         """Run multiple episodes and return all results with trajectories."""
         results = []
+        failed = 0
         for i in range(num_episodes):
-            result = self.run_episode(agent_fn=agent_fn)
-            results.append(result)
+            try:
+                result = self.run_episode(agent_fn=agent_fn)
+                results.append(result)
+            except Exception as e:
+                failed += 1
+                logger.warning("Episode %d failed: %s", i + 1, e)
             if (i + 1) % 10 == 0:
-                logger.info("Completed %d/%d episodes, avg reward: %.3f",
-                             i + 1, num_episodes, self._stats.avg_reward)
+                logger.info(
+                    "Completed %d/%d episodes (%d failed), avg reward: %.3f",
+                    i + 1,
+                    num_episodes,
+                    failed,
+                    self._stats.avg_reward,
+                )
+        if failed:
+            logger.warning("Batch complete: %d/%d episodes failed", failed, num_episodes)
         return results
 
 
-def _random_agent(obs: dict, env: SREEnvironment) -> dict:
+def _random_agent(_obs: dict, env: SREEnvironment) -> dict:
     """Baseline random agent for testing the training loop."""
     rng = random.Random()
     max_time = env.scenario.episode_duration_seconds // 10 - 1
 
     if not env.diagnosed:
         if env.step_count < 3 or rng.random() > 0.3:
-            action_type = rng.choice([ActionType.QUERY_METRICS, ActionType.QUERY_LOGS,
-                                      ActionType.LIST_SERVICES, ActionType.LIST_ALERTS])
+            action_type = rng.choice(
+                [ActionType.QUERY_METRICS, ActionType.QUERY_LOGS, ActionType.LIST_SERVICES, ActionType.LIST_ALERTS]
+            )
         else:
             action_type = ActionType.DIAGNOSE
     else:

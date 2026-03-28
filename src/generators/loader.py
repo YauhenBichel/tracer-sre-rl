@@ -10,8 +10,11 @@ from pathlib import Path
 import yaml
 
 from src.models import (
-    GoldStandardRemediation, GoldStandardRootCause,
-    ScenarioDefinition, ServiceDefinition, TimelineEntry,
+    GoldStandardRemediation,
+    GoldStandardRootCause,
+    ScenarioDefinition,
+    ServiceDefinition,
+    TimelineEntry,
 )
 
 logger = logging.getLogger(__name__)
@@ -21,14 +24,21 @@ REQUIRED_FIELDS = ("id", "name", "services", "timeline")
 
 
 class ScenarioLoader:
-
     def __init__(self, scenarios_dir: str = SCENARIOS_DIR):
         self._dir = scenarios_dir
 
-    def load(self, path: str) -> ScenarioDefinition:
+    def load(self, path: str) -> ScenarioDefinition | None:
+        """Load a single scenario YAML. Returns None if file is missing or invalid."""
         logger.info("Loading scenario from %s", path)
-        with open(path) as f:
-            data = yaml.safe_load(f)
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f)
+        except FileNotFoundError:
+            logger.error("Scenario file not found: %s", path)
+            return None
+        except yaml.YAMLError as e:
+            logger.error("Invalid YAML in %s: %s", path, e)
+            return None
         return self._parse(data, path)
 
     def load_all(self, *, max_difficulty: float | None = None) -> list[ScenarioDefinition]:
@@ -40,7 +50,7 @@ class ScenarioLoader:
         paths = sorted(glob.glob(os.path.join(self._dir, "*.yaml")))
         if not paths:
             logger.warning("No scenarios found in %s", self._dir)
-        scenarios = [self.load(p) for p in paths]
+        scenarios = [s for p in paths if (s := self.load(p)) is not None]
         if max_difficulty is not None:
             scenarios = [s for s in scenarios if s.difficulty <= max_difficulty]
         return sorted(scenarios, key=lambda s: s.difficulty)
@@ -64,7 +74,8 @@ class ScenarioLoader:
                     service_type=s["service_type"],
                     dependencies=tuple(s.get("dependencies", [])),
                     config=s.get("config", {}),
-                ) for s in data["services"]
+                )
+                for s in data["services"]
             ),
             timeline=tuple(
                 TimelineEntry(
@@ -73,20 +84,23 @@ class ScenarioLoader:
                     service=t.get("service"),
                     params=t.get("params", {}),
                     description=t.get("description", ""),
-                ) for t in data["timeline"]
+                )
+                for t in data["timeline"]
             ),
             gold_root_causes=tuple(
                 GoldStandardRootCause(
                     taxonomy_label=rc["taxonomy_label"],
                     relevance=rc["relevance"],
                     evidence=tuple(rc.get("evidence", [])),
-                ) for rc in gold.get("root_causes", [])
+                )
+                for rc in gold.get("root_causes", [])
             ),
             gold_remediations=tuple(
                 GoldStandardRemediation(
                     action=r["action"],
                     effectiveness=r["effectiveness"],
-                ) for r in gold.get("remediations", [])
+                )
+                for r in gold.get("remediations", [])
             ),
             difficulty=data.get("difficulty", 0.5),
             max_investigation_steps=data.get("max_investigation_steps", 20),

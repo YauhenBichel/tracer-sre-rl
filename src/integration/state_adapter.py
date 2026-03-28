@@ -15,7 +15,7 @@ from typing import Any
 
 from src.agent_adapter import SREToolAdapter
 from src.evaluation.reward_calculator import RewardCalculator
-from src.integration.evidence_source import SIMULATED_SOURCE_KEY, build_simulated_sources
+from src.integration.evidence_source import build_simulated_sources
 from src.models import ScenarioDefinition
 
 
@@ -93,7 +93,8 @@ def scenario_to_agent_state(scenario: ScenarioDefinition, adapter: SREToolAdapte
         "alert_name": alert_name,
         "pipeline_name": pipeline_name,
         "severity": severity,
-        "alert_source": "simulated_rl_env",
+        # Empty string so opensre's detect_sources enables all integrations
+        "alert_source": "",
         "raw_alert": alert_json,
         "alert_json": alert_json,
         # Investigation planning
@@ -101,8 +102,11 @@ def scenario_to_agent_state(scenario: ScenarioDefinition, adapter: SREToolAdapte
         "plan_rationale": "",
         "available_sources": available_sources,
         "available_action_names": [
-            "get_alerts", "get_service_topology", "get_metrics",
-            "get_error_logs", "get_traces",
+            "get_alerts",
+            "get_service_topology",
+            "get_metrics",
+            "get_error_logs",
+            "get_traces",
         ],
         "resolved_integrations": resolved_integrations,
         # Evidence
@@ -125,7 +129,7 @@ def scenario_to_agent_state(scenario: ScenarioDefinition, adapter: SREToolAdapte
         # LangGraph context
         "thread_id": "",
         "run_id": "",
-        "_auth_token": "",
+        "_auth_token": "",  # nosec B105 - empty placeholder, not a real credential
         # Outputs
         "slack_message": "",
         "problem_md": "",
@@ -214,12 +218,12 @@ def _map_remediation(steps: list[str], scenario: ScenarioDefinition) -> str:
             best_score = matches
             best_match = gold.action
 
-    return best_match if best_match else steps[0]
+    return best_match if best_match else (steps[0] if steps else "")
 
 
 def _build_action_history(executed_hypotheses: list[dict]) -> list[dict]:
     """Convert open-sre-agent's executed_hypotheses into RL action history format."""
-    history = []
+    history: list[dict[str, str | int]] = []
     for hyp in executed_hypotheses:
         action_name = hyp.get("action", hyp.get("name", ""))
         target = hyp.get("service", hyp.get("target", "unknown"))

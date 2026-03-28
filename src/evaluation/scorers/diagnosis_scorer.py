@@ -12,7 +12,6 @@ from src.models import ScenarioDefinition
 
 
 class DiagnosisScorer:
-
     def __init__(self):
         cfg = reward_config()["diagnosis"]
         self._depth_scores: dict[int, float] = {int(k): v for k, v in cfg["depth_scores"].items()}
@@ -21,10 +20,9 @@ class DiagnosisScorer:
 
     def score(self, label: str, scenario: ScenarioDefinition) -> float:
         """Best similarity-weighted score across all gold-standard root causes."""
-        return max(
-            self._similarity(label, gold.taxonomy_label) * gold.relevance
-            for gold in scenario.gold_root_causes
-        )
+        if not scenario.gold_root_causes:
+            return 0.0
+        return max(self._similarity(label, gold.taxonomy_label) * gold.relevance for gold in scenario.gold_root_causes)
 
     def _similarity(self, diagnosed: str, gold: str) -> float:
         """Hierarchical similarity based on depth of common taxonomy prefix.
@@ -40,7 +38,7 @@ class DiagnosisScorer:
         gold_parts = gold.split(".")
 
         common_depth = 0
-        for a, b in zip(diagnosed_parts, gold_parts):
+        for a, b in zip(diagnosed_parts, gold_parts, strict=False):
             if a == b:
                 common_depth += 1
             else:
@@ -50,4 +48,6 @@ class DiagnosisScorer:
             return self._depth_scores[common_depth]
 
         max_depth = max(len(diagnosed_parts), len(gold_parts))
+        if max_depth == 0:
+            return 0.0
         return self._deep_match_base + self._deep_match_scale * (common_depth / max_depth)

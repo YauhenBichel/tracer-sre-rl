@@ -1,8 +1,9 @@
 """Tests for the Gymnasium RL environment."""
 
 import pytest
-from src.environment.env import SREEnvironment
+
 from src.environment.actions import ActionType
+from src.environment.env import SREEnvironment
 from src.generators.loader import ScenarioLoader
 
 
@@ -19,8 +20,14 @@ def env(scenarios):
 
 
 def _action(action_type, target=0, time_start=0, time_end=89, diagnosis_idx=0, remediation_idx=0):
-    return {"action_type": action_type, "target_service": target, "time_start": time_start,
-            "time_end": time_end, "diagnosis_idx": diagnosis_idx, "remediation_idx": remediation_idx}
+    return {
+        "action_type": action_type,
+        "target_service": target,
+        "time_start": time_start,
+        "time_end": time_end,
+        "diagnosis_idx": diagnosis_idx,
+        "remediation_idx": remediation_idx,
+    }
 
 
 def test_env_reset(env):
@@ -61,10 +68,10 @@ def test_env_full_episode(env):
     env.step(_action(ActionType.LIST_ALERTS))
     env.step(_action(ActionType.QUERY_METRICS, target=0, time_start=40))
     env.step(_action(ActionType.QUERY_METRICS, target=1, time_start=40))
-    obs, reward, terminated, _, _ = env.step(_action(ActionType.DIAGNOSE))
+    _obs, reward, terminated, _, _ = env.step(_action(ActionType.DIAGNOSE))
     assert not terminated
 
-    obs, reward, terminated, _, _ = env.step(_action(ActionType.REMEDIATE))
+    _obs, reward, terminated, _, _ = env.step(_action(ActionType.REMEDIATE))
     assert terminated
     assert reward > 0
 

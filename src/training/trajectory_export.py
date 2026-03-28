@@ -44,10 +44,7 @@ def export_jsonl(results: list[EpisodeResult], output_path: str) -> int:
 
             # Build the prompt from observations
             observations = [step.observation for step in result.trajectory]
-            actions = [
-                {"tool": step.action_type, "target": step.target_service}
-                for step in result.trajectory
-            ]
+            actions = [{"tool": step.action_type, "target": step.target_service} for step in result.trajectory]
 
             example = {
                 "prompt": observations[0] if observations else "",
@@ -126,9 +123,6 @@ def _episode_to_dict(result: EpisodeResult) -> dict:
         "reward": result.reward,
         "steps": result.steps,
         "seed": result.seed,
-        "actions": [
-            {"tool": step.action_type, "target": step.target_service}
-            for step in result.trajectory
-        ],
+        "actions": [{"tool": step.action_type, "target": step.target_service} for step in result.trajectory],
         "observations": [step.observation for step in result.trajectory],
     }

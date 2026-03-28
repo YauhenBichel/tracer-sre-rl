@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 
 from src.config import log_templates
-from src.constants import ERROR_EVENT_TYPES, WARN_EVENT_TYPES, EVENT_CASCADE, SERVICE_TYPE_APPLICATION
+from src.constants import ERROR_EVENT_TYPES, EVENT_CASCADE, SERVICE_TYPE_APPLICATION, WARN_EVENT_TYPES
 from src.models import LogEntry, LogLevel, ServiceDefinition, TimelineEntry
 
 BASE_LOG_PROBABILITY = 0.2
@@ -67,7 +67,6 @@ EVENT_LOG_TEMPLATES: dict[str, dict[str, list[str]]] = {
 
 
 class LogGenerator:
-
     def __init__(self, rng: random.Random):
         self._rng = rng
 
@@ -78,8 +77,9 @@ class LogGenerator:
                 prob = min(MAX_LOG_PROBABILITY, prob + EVENT_LOG_PROBABILITY_INCREMENT)
         return self._rng.random() < prob
 
-    def generate(self, service: ServiceDefinition, timestamp: int,
-                 active_events: list[TimelineEntry]) -> LogEntry | None:
+    def generate(
+        self, service: ServiceDefinition, timestamp: int, active_events: list[TimelineEntry]
+    ) -> LogEntry | None:
         level = self._pick_level(service, active_events)
         template = self._pick_template(service, level, active_events)
         if template is None:
@@ -95,16 +95,20 @@ class LogGenerator:
         )
 
     def _pick_level(self, service: ServiceDefinition, active: list[TimelineEntry]) -> LogLevel:
-        def has(types: set[str]) -> bool:
-            return any(e.event_type in types and (e.service == service.name or e.event_type == EVENT_CASCADE) for e in active)
+        def has(types: frozenset[str] | set[str]) -> bool:
+            return any(
+                e.event_type in types and (e.service == service.name or e.event_type == EVENT_CASCADE) for e in active
+            )
+
         if has(ERROR_EVENT_TYPES) and self._rng.random() < ERROR_LEVEL_PROBABILITY:
             return LogLevel.ERROR
         if has(WARN_EVENT_TYPES) and self._rng.random() < WARN_LEVEL_PROBABILITY:
             return LogLevel.WARN
         return LogLevel.INFO
 
-    def _pick_template(self, service: ServiceDefinition, level: LogLevel,
-                       active_events: list[TimelineEntry]) -> str | None:
+    def _pick_template(
+        self, service: ServiceDefinition, level: LogLevel, active_events: list[TimelineEntry]
+    ) -> str | None:
         """Select a log template that is relevant to the active events.
 
         If error/warn events are active, use event-specific templates.
@@ -128,8 +132,9 @@ class LogGenerator:
         options = all_templates.get(level.value, all_templates.get("INFO", []))
         return self._rng.choice(options) if options else None
 
-    def _render(self, template: str, service: ServiceDefinition,
-                active_events: list[TimelineEntry] | None = None) -> str:
+    def _render(
+        self, template: str, service: ServiceDefinition, active_events: list[TimelineEntry] | None = None
+    ) -> str:
         """Render a log template with values correlated to active events."""
         generators = self._build_value_generators(service, active_events)
         try:
@@ -138,8 +143,7 @@ class LogGenerator:
         except (KeyError, IndexError):
             return template
 
-    def _build_value_generators(self, service: ServiceDefinition,
-                                active_events: list[TimelineEntry] | None) -> dict:
+    def _build_value_generators(self, service: ServiceDefinition, active_events: list[TimelineEntry] | None) -> dict:
         """Build placeholder value generators correlated to active events.
 
         During error events, values reflect incident state (high latency,
@@ -162,7 +166,9 @@ class LogGenerator:
             "duration": lambda: rng.randint(1000, 15000) if has_errors else rng.randint(1, 200),
             "upstream": lambda: upstream,
             # Connection fields — high during incidents
-            "active": lambda: rng.randint(int(max_conn * 0.85), max_conn) if has_errors else rng.randint(10, int(max_conn * 0.5)),
+            "active": lambda: (
+                rng.randint(int(max_conn * 0.85), max_conn) if has_errors else rng.randint(10, int(max_conn * 0.5))
+            ),
             "idle": lambda: rng.randint(0, 5) if has_errors else rng.randint(5, 20),
             "max": lambda: max_conn,
             # Error fields

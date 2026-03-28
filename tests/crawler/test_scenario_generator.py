@@ -1,7 +1,6 @@
 """Tests for the incident-to-scenario generator."""
 
 import tempfile
-from pathlib import Path
 
 import yaml
 
@@ -150,10 +149,11 @@ def test_generate_definition_returns_scenario():
 def test_generate_definition_is_playable():
     """Generated ScenarioDefinition should work in the RL environment."""
     from src.environment.env import SREEnvironment
+
     gen = ScenarioGenerator()
     scenario = gen.generate_definition(_make_incident())
     env = SREEnvironment(scenario=scenario, seed=42)
-    obs, info = env.reset()
+    obs, _info = env.reset()
     assert len(obs["text_observation"]) > 0
     env.close()
 

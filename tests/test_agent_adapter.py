@@ -1,6 +1,6 @@
 """Tests for the LLM agent tool adapter."""
 
-from src.agent_adapter import SREToolAdapter, TOOL_DEFINITIONS
+from src.agent_adapter import TOOL_DEFINITIONS, SREToolAdapter
 from src.generators.loader import ScenarioLoader
 
 

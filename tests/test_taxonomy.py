@@ -1,7 +1,7 @@
 """Tests for the failure taxonomy."""
 
-from src.taxonomy import build_default_taxonomy
 from src.evaluation.scorers.diagnosis_scorer import DiagnosisScorer
+from src.taxonomy import build_default_taxonomy
 
 
 def test_taxonomy_builds():
@@ -34,7 +34,13 @@ def test_taxonomy_leaves():
 
 def test_similarity():
     scorer = DiagnosisScorer()
-    assert scorer._similarity("infrastructure.database.connection_pool", "infrastructure.database.connection_pool") == 1.0
-    assert 0.5 < scorer._similarity("infrastructure.database.connection_pool", "infrastructure.database.replication_lag") < 1.0
+    assert (
+        scorer._similarity("infrastructure.database.connection_pool", "infrastructure.database.connection_pool") == 1.0
+    )
+    assert (
+        0.5
+        < scorer._similarity("infrastructure.database.connection_pool", "infrastructure.database.replication_lag")
+        < 1.0
+    )
     assert 0.2 < scorer._similarity("infrastructure.database.connection_pool", "infrastructure.network.dns") < 0.6
     assert scorer._similarity("infrastructure.database.connection_pool", "application.memory.leak") < 0.3

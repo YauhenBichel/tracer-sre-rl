@@ -595,26 +595,86 @@ A high-frequency, low-coverage, low-agent-score node gets the highest priority. 
 
 ---
 
-## RL Loop Closure: How the Agent Improves
+## RL Loop Closure: How the opensre Agent Learns
+
+### The Learning Flow
 
 ```
-1. Sample scenario from training set (weighted by coverage gaps + agent weakness)
-2. Instantiate environment (L1: generate synthetic telemetry)
-3. Agent receives initial observation (alert + system topology)
-4. Agent takes actions (query metrics, search logs, inspect traces)
-5. Environment returns observations (telemetry for queried services/time ranges)
-6. Agent proposes root cause + remediation
-7. Evaluation engine scores against gold standard → reward
-8. Policy update (GRPO/PPO on the trajectory)
-9. Log episode results → update coverage matrix + agent performance by taxonomy node
-10. Curriculum learning: increase difficulty over time (more services, more subtle failures,
-    compound scenarios)
+┌─────────────────────────────────────────────────────────────────┐
+│                    TRAINING ITERATION                            │
+│                                                                  │
+│  1. Sample scenario                                              │
+│     config/training.yaml → ScenarioGenerator → ScenarioDefinition│
+│     (Aiops-Dataset faults + builtin YAMLs + crawled incidents)   │
+│                                                                  │
+│  2. opensre investigates                                         │
+│     ┌──────────────┐     ┌──────────────────────────────────┐   │
+│     │ extract_alert │────▶│ plan_actions                     │   │
+│     └──────────────┘     │  LLM decides: query metrics?     │   │
+│                          │  query logs? which service?       │   │
+│                          └──────────┬───────────────────────┘   │
+│                                     ▼                            │
+│     ┌──────────────────────────────────────────────────────┐    │
+│     │ investigate                                           │    │
+│     │  SimulatedAction.function() → synthetic evidence      │    │
+│     │  (replaces real Grafana/Datadog during training)       │    │
+│     └──────────┬───────────────────────────────────────────┘    │
+│                ▼                                                 │
+│     ┌──────────────────┐                                        │
+│     │ diagnose          │  LLM analyzes evidence →              │
+│     │  root_cause       │  "infrastructure.database.             │
+│     │  remediation_steps│   connection_pool"                     │
+│     └──────────┬───────┘                                        │
+│                ▼                                                 │
+│  3. Score against gold standard                                  │
+│     RewardCalculator → R = 0.40·diag + 0.20·eff + 0.25·rem     │
+│                          + 0.15·safety                           │
+│                                                                  │
+│  4. Save trajectory                                              │
+│     (observations, LLM decisions, actions, reward) → JSONL       │
+│                                                                  │
+│  5. Update policy (offline, after batch)                         │
+│     trajectories.jsonl → GRPO/DPO fine-tuning on the LLM        │
+│     High-reward trajectories reinforced, low-reward suppressed   │
+│                                                                  │
+│  6. Deploy improved model back to opensre                        │
+│     Updated LLM → better plan_actions + diagnose decisions       │
+│                                                                  │
+│  Repeat: new scenario (perturbed) → investigate → score → save  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-The agent improves against unseen scenarios through:
-- **Generalisation from parameterised training**: Seeing many variations of "connection pool exhaustion" with different topologies and parameters teaches the pattern, not the specific instance.
-- **Curriculum learning**: Starting with simple single-failure scenarios and progressing to compound failures.
-- **Adversarial generation**: LLM-generated scenarios that probe the agent's weaknesses (identified from the coverage matrix).
+### What Improves Over Training
+
+The LLM in opensre makes two key decisions that RL improves:
+
+1. **`plan_actions` node** — which tools to call and in what order. A trained agent learns: "check the alerted service's metrics first, then its dependencies, then diagnose" vs a naive agent that queries random services.
+
+2. **`root_cause_diagnosis` node** — which root cause to propose given the evidence. A trained agent learns: "high active_connections + error_rate spike on the database = connection pool exhaustion" vs a naive agent that guesses.
+
+### How the Agent Generalises
+
+- **Perturbation**: Same scenario, different seed = different timing/magnitudes. The agent learns patterns, not specific numbers.
+- **Curriculum**: `config/training.yaml` controls `max_difficulty`. Start with easy (disk full, 3 services), progress to hard (cascading failure, 8 services).
+- **Coverage**: 241 Aiops-Dataset faults across 6 taxonomy leaves. Each has different service names, fault types, and evidence patterns.
+
+### Running the Learning Loop
+
+```bash
+# Step 1: Collect trajectories (standalone mode, no LLM needed)
+make train-real
+# or with opensre's LLM:
+PYTHONPATH="../opensre:." python -m src.integration.opensre_runner --use-opensre
+
+# Step 2: Export for fine-tuning
+make export  # → training_data/trajectories.jsonl
+
+# Step 3: Fine-tune (outside tracer-sre-rl, using trl/DeepSpeed)
+# python train_grpo.py --data training_data/trajectories.jsonl --model <base-model>
+
+# Step 4: Deploy improved model back to opensre
+# Update opensre's LLM config to point to the fine-tuned model
+```
 
 ---
 

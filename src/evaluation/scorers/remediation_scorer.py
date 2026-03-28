@@ -12,7 +12,6 @@ from src.models import ScenarioDefinition
 
 
 class RemediationScorer:
-
     def __init__(self):
         self._partial_credit: dict[str, float] = reward_config()["remediation"]["partial_credit"]
 

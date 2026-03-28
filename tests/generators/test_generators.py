@@ -1,12 +1,14 @@
 """Tests for individual generators (metrics, logs, traces)."""
 
 import random
+
 import pytest
-from src.models import ServiceDefinition, TimelineEntry
+
 from src.generators.effects.registry import build_default_registry
-from src.generators.metrics import MetricsGenerator
 from src.generators.logs import LogGenerator
+from src.generators.metrics import MetricsGenerator
 from src.generators.traces import TraceGenerator
+from src.models import ServiceDefinition, TimelineEntry
 
 
 @pytest.fixture
@@ -30,14 +32,17 @@ def normal_events():
 
 @pytest.fixture
 def error_events():
-    return [TimelineEntry(
-        time_offset_seconds=0, event_type="error_spike", service="app",
-        params={"target_rate": 0.5, "duration_seconds": 100},
-    )]
+    return [
+        TimelineEntry(
+            time_offset_seconds=0,
+            event_type="error_spike",
+            service="app",
+            params={"target_rate": 0.5, "duration_seconds": 100},
+        )
+    ]
 
 
 class TestMetricsGenerator:
-
     def test_generates_samples_for_service(self, rng, services, normal_events):
         gen = MetricsGenerator(rng, build_default_registry())
         samples = gen.generate(services[0], timestamp=100, active_events=normal_events)
@@ -60,7 +65,6 @@ class TestMetricsGenerator:
 
 
 class TestLogGenerator:
-
     def test_generates_log_entry(self, rng, services, normal_events):
         gen = LogGenerator(rng)
         entry = gen.generate(services[0], timestamp=100, active_events=normal_events)
@@ -70,7 +74,9 @@ class TestLogGenerator:
     def test_error_events_increase_log_probability(self, services, error_events):
         normal = [TimelineEntry(time_offset_seconds=0, event_type="normal_traffic")]
         normal_count = sum(1 for s in range(100) if LogGenerator(random.Random(s)).should_generate(services[1], normal))
-        error_count = sum(1 for s in range(100) if LogGenerator(random.Random(s)).should_generate(services[1], error_events))
+        error_count = sum(
+            1 for s in range(100) if LogGenerator(random.Random(s)).should_generate(services[1], error_events)
+        )
         assert error_count > normal_count
 
     def test_log_level_reflects_error_events(self, services, error_events):
@@ -85,7 +91,6 @@ class TestLogGenerator:
 
 
 class TestTraceGenerator:
-
     def test_generates_spans(self, rng, services, normal_events):
         gen = TraceGenerator(rng)
         spans = gen.generate(services, timestamp=100, active_events=normal_events)

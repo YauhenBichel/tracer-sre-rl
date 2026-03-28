@@ -1,0 +1,64 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    # Style & correctness
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "I",     # isort (import ordering)
+    "N",     # pep8-naming (consistent naming conventions)
+    "UP",    # pyupgrade (modern Python idioms)
+    "RUF",   # ruff-specific rules
+    # Design patterns & code quality
+    "B",     # flake8-bugbear (design pitfalls, mutable defaults, etc.)
+    "SIM",   # flake8-simplify (simplifiable patterns)
+    "PIE",   # flake8-pie (unnecessary code)
+    "RET",   # flake8-return (return statement consistency)
+    "ARG",   # flake8-unused-arguments
+    "PL",    # pylint (complexity, design, convention, errors)
+    "PT",    # flake8-pytest-style (consistent test patterns)
+    # Security & performance
+    "S",     # flake8-bandit (security)
+    "PERF",  # perflint (performance)
+    "C4",    # flake8-comprehensions (performance)
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "S101",    # assert used (needed in tests)
+    "S311",    # pseudo-random generators (fine for RL training)
+    "PLR2004", # magic value in comparison (too noisy for numeric RL code)
+    "PLR0913", # too many arguments (dataclass constructors naturally have many)
+    "ARG002",  # unused method argument (common in interface/base class overrides)
+    "RET504",  # unnecessary assignment before return (sometimes aids readability)
+    "SIM108",  # ternary instead of if-else (readability preference)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "ARG", "PLR0915", "PLR0911", "PLC0415"]
+"src/integration/opensre_runner.py" = ["ARG001", "PLC0415"]  # optional dep imports in try/except
+"src/integration/**/*.py" = ["ARG001"]  # adapter stubs may have unused args
+"src/training/episode_runner.py" = ["PLC0415"]  # conditional imports based on config
+
+[tool.ruff.lint.pylint]
+max-branches = 12
+max-returns = 8
+max-statements = 60
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B311"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true

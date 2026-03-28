@@ -12,6 +12,7 @@ MAX_SERVICES = 10
 @dataclass
 class EpisodeState:
     """Mutable state for a single episode. Reset at the start of each episode."""
+
     obs_text: str = ""
     step_count: int = 0
     services_queried: np.ndarray = field(default_factory=lambda: np.zeros(MAX_SERVICES, dtype=np.int8))

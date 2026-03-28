@@ -27,6 +27,7 @@ def _load_scenario():
 
 # --- Evidence source tests ---
 
+
 def test_simulated_actions_have_parameter_extractor():
     """execute_actions rejects actions with parameter_extractor=None."""
     scenario = _load_scenario()
@@ -105,6 +106,7 @@ def test_simulated_sources_has_connection_verified():
 
 # --- State adapter tests ---
 
+
 def test_agent_state_has_investigation_started_at():
     """AgentState must include investigation_started_at for timing calculations."""
     scenario = _load_scenario()
@@ -147,20 +149,41 @@ def test_agent_state_has_all_required_fields():
     state = scenario_to_agent_state(scenario, adapter)
 
     required_fields = [
-        "mode", "is_noise", "alert_name", "pipeline_name", "severity",
-        "alert_source", "raw_alert", "alert_json", "planned_actions",
-        "plan_rationale", "available_sources", "available_action_names",
-        "resolved_integrations", "context", "evidence", "root_cause",
-        "root_cause_category", "validated_claims", "non_validated_claims",
-        "validity_score", "investigation_recommendations", "remediation_steps",
-        "investigation_loop_count", "hypotheses", "executed_hypotheses",
-        "investigation_started_at", "slack_context", "problem_md",
+        "mode",
+        "is_noise",
+        "alert_name",
+        "pipeline_name",
+        "severity",
+        "alert_source",
+        "raw_alert",
+        "alert_json",
+        "planned_actions",
+        "plan_rationale",
+        "available_sources",
+        "available_action_names",
+        "resolved_integrations",
+        "context",
+        "evidence",
+        "root_cause",
+        "root_cause_category",
+        "validated_claims",
+        "non_validated_claims",
+        "validity_score",
+        "investigation_recommendations",
+        "remediation_steps",
+        "investigation_loop_count",
+        "hypotheses",
+        "executed_hypotheses",
+        "investigation_started_at",
+        "slack_context",
+        "problem_md",
     ]
     for field in required_fields:
         assert field in state, f"Missing required field: {field}"
 
 
 # --- Scoring tests ---
+
 
 def test_score_correct_diagnosis():
     scenario = _load_scenario()
@@ -206,6 +229,7 @@ def test_score_empty_diagnosis():
 
 
 # --- End-to-end test ---
+
 
 def test_full_integration_flow():
     """Simulates the full opensre execute_actions pipeline against the RL env."""

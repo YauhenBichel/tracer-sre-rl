@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 
 from .crawlers import (
-    IncidentCrawler, GCPIncidentCrawler, CloudflareIncidentCrawler,
+    CloudflareIncidentCrawler,
+    GCPIncidentCrawler,
     GitHubPostmortemCrawler,
+    IncidentCrawler,
 )
 from .repository import IncidentRepository, SqliteIncidentRepository
 

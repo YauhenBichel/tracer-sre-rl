@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from src.constants import (
-    METRIC_REQUEST_RATE, METRIC_QUERY_RATE, METRIC_ENQUEUE_RATE,
-    METRIC_CPU_PERCENT, METRIC_MEMORY_PERCENT, METRIC_LATENCY,
+    METRIC_CPU_PERCENT,
+    METRIC_ENQUEUE_RATE,
+    METRIC_LATENCY,
+    METRIC_MEMORY_PERCENT,
+    METRIC_QUERY_RATE,
+    METRIC_REQUEST_RATE,
 )
+
 from .base import EventEffectHandler
 
 RATE_METRICS = {METRIC_REQUEST_RATE, METRIC_QUERY_RATE, METRIC_ENQUEUE_RATE}
@@ -17,7 +22,6 @@ DEFAULT_TRAFFIC_MULTIPLIER = 2.0
 
 
 class TrafficRampEffect(EventEffectHandler):
-
     def apply(self, base_value, metric_name, service, event, progress):
         multiplier = event.params.get("multiplier", DEFAULT_TRAFFIC_MULTIPLIER)
         if metric_name in RATE_METRICS:

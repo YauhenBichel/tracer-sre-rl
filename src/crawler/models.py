@@ -45,8 +45,7 @@ class IncidentCrawler(ABC):
         self._cfg = crawler_config(self.source_name)
 
     @abstractmethod
-    def crawl(self) -> list[NormalisedIncident]:
-        ...
+    def crawl(self) -> list[NormalisedIncident]: ...
 
     def _fetch(self, url: str, **kwargs) -> requests.Response:
         resp = requests.get(url, timeout=REQUEST_TIMEOUT, **kwargs)

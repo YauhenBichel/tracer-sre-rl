@@ -1,6 +1,7 @@
 """Tests for the synthetic telemetry generator."""
 
 import pytest
+
 from src.generators.loader import ScenarioLoader
 from src.generators.telemetry import TelemetryGenerator
 
@@ -50,7 +51,7 @@ def test_deterministic_with_seed(scenarios):
     t1 = TelemetryGenerator(seed=123).generate(scenario)
     t2 = TelemetryGenerator(seed=123).generate(scenario)
     assert len(t1.metrics) == len(t2.metrics)
-    for m1, m2 in zip(t1.metrics, t2.metrics):
+    for m1, m2 in zip(t1.metrics, t2.metrics, strict=True):
         assert m1.service == m2.service
         assert m1.metric_name == m2.metric_name
         assert m1.value == m2.value
@@ -60,8 +61,16 @@ def test_event_effects_visible_in_metrics(generator, scenarios):
     scenario = next(s for s in scenarios if "connection" in s.name.lower())
     telemetry = generator.generate(scenario)
 
-    early = [m.value for m in telemetry.metrics if m.service == "postgres-primary" and m.timestamp < 200 and "connection" in m.metric_name]
-    late = [m.value for m in telemetry.metrics if m.service == "postgres-primary" and m.timestamp > 500 and "connection" in m.metric_name]
+    early = [
+        m.value
+        for m in telemetry.metrics
+        if m.service == "postgres-primary" and m.timestamp < 200 and "connection" in m.metric_name
+    ]
+    late = [
+        m.value
+        for m in telemetry.metrics
+        if m.service == "postgres-primary" and m.timestamp > 500 and "connection" in m.metric_name
+    ]
 
     if early and late:
         assert max(late) > max(early), "Connection count should increase during exhaustion"
