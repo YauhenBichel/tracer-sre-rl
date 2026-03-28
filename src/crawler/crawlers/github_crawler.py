@@ -42,16 +42,18 @@ class GitHubPostmortemCrawler(IncidentCrawler):
                 desc, url = match.group(1), match.group(2)
                 if any(skip in url for skip in skip_urls):
                     continue
-                results.append(NormalisedIncident(
-                    id=f"{self.source_name}-{hashlib.md5(url.encode()).hexdigest()[:12]}",
-                    source=self.source_name,
-                    source_url=url,
-                    title=desc[:MAX_TITLE_LENGTH],
-                    summary=f"[{category}] {desc}",
-                    taxonomy_labels=self._classify(f"{desc} {category}"),
-                    ingested_at=DateTimeUtils.now_iso(),
-                    quality_score=DEFAULT_QUALITY_SCORE,
-                ))
+                results.append(
+                    NormalisedIncident(
+                        id=f"{self.source_name}-{hashlib.sha256(url.encode()).hexdigest()[:12]}",
+                        source=self.source_name,
+                        source_url=url,
+                        title=desc[:MAX_TITLE_LENGTH],
+                        summary=f"[{category}] {desc}",
+                        taxonomy_labels=self._classify(f"{desc} {category}"),
+                        ingested_at=DateTimeUtils.now_iso(),
+                        quality_score=DEFAULT_QUALITY_SCORE,
+                    )
+                )
         logger.info("GitHub PM: %d incidents", len(results))
         return results
 

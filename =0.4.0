@@ -1,0 +1,5 @@
+Collecting ruff
+  Using cached ruff-0.15.8-py3-none-macosx_11_0_arm64.whl.metadata (26 kB)
+Using cached ruff-0.15.8-py3-none-macosx_11_0_arm64.whl (10.3 MB)
+Installing collected packages: ruff
+Successfully installed ruff-0.15.8

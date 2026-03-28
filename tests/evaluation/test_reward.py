@@ -1,6 +1,7 @@
 """Tests for the reward calculation system."""
 
 import pytest
+
 from src.evaluation.reward_calculator import RewardCalculator
 from src.generators.loader import ScenarioLoader
 
@@ -35,7 +36,9 @@ def test_wrong_diagnosis(calculator, scenarios):
 
 
 def test_efficiency_rewards_fast(calculator):
-    assert calculator._efficiency.score(steps_taken=3, max_steps=20) > calculator._efficiency.score(steps_taken=15, max_steps=20)
+    assert calculator._efficiency.score(steps_taken=3, max_steps=20) > calculator._efficiency.score(
+        steps_taken=15, max_steps=20
+    )
 
 
 def test_efficiency_perfect_at_min(calculator):
@@ -73,8 +76,12 @@ def test_full_reward(calculator, scenarios):
     label = scenario.gold_root_causes[0].taxonomy_label
     best_rem = max(scenario.gold_remediations, key=lambda r: r.effectiveness)
     reward = calculator.calculate(
-        scenario=scenario, diagnosis={"label": label}, remediation={"action": best_rem.action},
-        steps_taken=5, max_steps=20, action_history=[
+        scenario=scenario,
+        diagnosis={"label": label},
+        remediation={"action": best_rem.action},
+        steps_taken=5,
+        max_steps=20,
+        action_history=[
             {"step": 1, "action": "LIST_ALERTS", "target": "system"},
             {"step": 2, "action": "QUERY_METRICS", "target": "a"},
             {"step": 3, "action": "QUERY_METRICS", "target": "b"},

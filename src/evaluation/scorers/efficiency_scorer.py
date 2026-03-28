@@ -14,7 +14,6 @@ from src.config import reward_config
 
 
 class EfficiencyScorer:
-
     def __init__(self):
         self._ideal_steps: int = reward_config()["efficiency"]["ideal_steps"]
 

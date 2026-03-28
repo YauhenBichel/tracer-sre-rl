@@ -20,12 +20,17 @@ def _write_csv(rows: list[dict]) -> str:
 
 
 def test_load_groundtruth():
-    path = _write_csv([
-        {"timestamp": "1651338400", "level": "node", "cmdb_id": "node-6",
-         "failure_type": "Node CPU Failure"},
-        {"timestamp": "1651339370", "level": "pod", "cmdb_id": "frontend-0",
-         "failure_type": "Kubernetes Container Memory Load"},
-    ])
+    path = _write_csv(
+        [
+            {"timestamp": "1651338400", "level": "node", "cmdb_id": "node-6", "failure_type": "Node CPU Failure"},
+            {
+                "timestamp": "1651339370",
+                "level": "pod",
+                "cmdb_id": "frontend-0",
+                "failure_type": "Kubernetes Container Memory Load",
+            },
+        ]
+    )
     incidents = load_aiops_groundtruth(path)
     assert len(incidents) == 2
     assert incidents[0].source == "aiops_dataset"
@@ -33,14 +38,21 @@ def test_load_groundtruth():
 
 
 def test_taxonomy_classification():
-    path = _write_csv([
-        {"timestamp": "1", "level": "node", "cmdb_id": "n1", "failure_type": "Node CPU Failure"},
-        {"timestamp": "2", "level": "pod", "cmdb_id": "s1", "failure_type": "Kubernetes Container Memory Load"},
-        {"timestamp": "3", "level": "pod", "cmdb_id": "s2", "failure_type": "Kubernetes Container Network Latency"},
-        {"timestamp": "4", "level": "node", "cmdb_id": "n2", "failure_type": "Node Disk Space Consumption"},
-        {"timestamp": "5", "level": "pod", "cmdb_id": "s3", "failure_type": "Kubernetes Container Read I/O Load"},
-        {"timestamp": "6", "level": "pod", "cmdb_id": "s4", "failure_type": "Kubernetes Container Process Termination"},
-    ])
+    path = _write_csv(
+        [
+            {"timestamp": "1", "level": "node", "cmdb_id": "n1", "failure_type": "Node CPU Failure"},
+            {"timestamp": "2", "level": "pod", "cmdb_id": "s1", "failure_type": "Kubernetes Container Memory Load"},
+            {"timestamp": "3", "level": "pod", "cmdb_id": "s2", "failure_type": "Kubernetes Container Network Latency"},
+            {"timestamp": "4", "level": "node", "cmdb_id": "n2", "failure_type": "Node Disk Space Consumption"},
+            {"timestamp": "5", "level": "pod", "cmdb_id": "s3", "failure_type": "Kubernetes Container Read I/O Load"},
+            {
+                "timestamp": "6",
+                "level": "pod",
+                "cmdb_id": "s4",
+                "failure_type": "Kubernetes Container Process Termination",
+            },
+        ]
+    )
     incidents = load_aiops_groundtruth(path)
 
     assert "infrastructure.compute.cpu_saturation" in incidents[0].taxonomy_labels
@@ -61,10 +73,11 @@ def test_incidents_are_playable():
     from src.crawler.scenario_generator import ScenarioGenerator
     from src.environment.env import SREEnvironment
 
-    path = _write_csv([
-        {"timestamp": "1651338400", "level": "node", "cmdb_id": "node-6",
-         "failure_type": "Node CPU Spiking"},
-    ])
+    path = _write_csv(
+        [
+            {"timestamp": "1651338400", "level": "node", "cmdb_id": "node-6", "failure_type": "Node CPU Spiking"},
+        ]
+    )
     incidents = load_aiops_groundtruth(path)
     scenarios = ScenarioGenerator().batch_generate(incidents, min_quality=0.0)
 

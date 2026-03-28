@@ -20,20 +20,27 @@ DEFAULT_ERROR_STATUS_PROBABILITY = 0.3
 
 
 class TraceGenerator:
-
     def __init__(self, rng: random.Random):
         self._rng = rng
 
-    def generate(self, services: tuple[ServiceDefinition, ...], timestamp: int,
-                 active_events: list[TimelineEntry]) -> list[TraceSpan]:
+    def generate(
+        self, services: tuple[ServiceDefinition, ...], timestamp: int, active_events: list[TimelineEntry]
+    ) -> list[TraceSpan]:
         trace_id = uuid.uuid4().hex[:32]
         entry = next((s for s in services if s.service_type == SERVICE_TYPE_WEB_SERVER), services[0])
         service_map = {s.name: s for s in services}
         return self._build_spans(entry, service_map, trace_id, None, timestamp, active_events, depth=0)
 
-    def _build_spans(self, service: ServiceDefinition, service_map: dict[str, ServiceDefinition],
-                     trace_id: str, parent_id: str | None, timestamp: int,
-                     active: list[TimelineEntry], depth: int) -> list[TraceSpan]:
+    def _build_spans(
+        self,
+        service: ServiceDefinition,
+        service_map: dict[str, ServiceDefinition],
+        trace_id: str,
+        parent_id: str | None,
+        timestamp: int,
+        active: list[TimelineEntry],
+        depth: int,
+    ) -> list[TraceSpan]:
         if depth > MAX_TRACE_DEPTH:
             return []
 
@@ -52,10 +59,14 @@ class TraceGenerator:
 
         span_id = uuid.uuid4().hex[:16]
         span = TraceSpan(
-            trace_id=trace_id, span_id=span_id, parent_span_id=parent_id,
-            service=service.name, operation=f"{service.service_type}.handle_request",
+            trace_id=trace_id,
+            span_id=span_id,
+            parent_span_id=parent_id,
+            service=service.name,
+            operation=f"{service.service_type}.handle_request",
             start_time=float(timestamp) + self._rng.uniform(0, 1),
-            duration_ms=round(max(MIN_SPAN_DURATION_MS, duration), 2), status=status,
+            duration_ms=round(max(MIN_SPAN_DURATION_MS, duration), 2),
+            status=status,
             attributes={"service_type": service.service_type},
         )
         result = [span]

@@ -1,35 +1,35 @@
-version: "3.8"
-
 services:
-  # Core SRE RL environment — runs baseline comparison demo
-  sre-rl-env:
+  demo:
     build: .
-    container_name: sre-rl-env
-    volumes:
-      - ./scenarios:/app/scenarios
-      - ./data:/app/data
+    container_name: sre-demo
     command: python demo.py --quiet
 
-  # Incident data crawler + optional scenario generation
-  crawler:
-    build: .
-    container_name: sre-crawler
-    volumes:
-      - ./data:/app/data
-      - ./scenarios:/app/scenarios
-    command: python run_crawler.py --db-path /app/data/incidents.db
-
-  # Run full test suite
-  tests:
+  test:
     build: .
     container_name: sre-tests
     command: python -m pytest tests/ -v
 
-  # Training loop — runs episodes and collects trajectory data
-  training:
+  train:
     build: .
     container_name: sre-training
     volumes:
-      - ./scenarios:/app/scenarios
+      - ./config:/app/config
       - ./data:/app/data
-    command: ["python", "run_training.py", "--episodes", "100"]
+      - ./training_data:/app/training_data
+    command: python run_training.py
+
+  train-export:
+    build: .
+    container_name: sre-export
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./training_data:/app/training_data
+    command: python run_training.py --export training_data/trajectories.jsonl
+
+  crawl:
+    build: .
+    container_name: sre-crawler
+    volumes:
+      - ./data:/app/data
+    command: python run_crawler.py --db-path /app/data/incidents.db

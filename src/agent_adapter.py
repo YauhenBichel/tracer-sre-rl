@@ -15,33 +15,66 @@ The adapter maintains episode state internally and tracks the reward.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from src.environment.env import SREEnvironment
 from src.environment.actions import ActionType
+from src.environment.env import SREEnvironment
 from src.models import ScenarioDefinition
 
 # Tool definitions in the format expected by LLM function-calling APIs.
 TOOL_DEFINITIONS = [
-    {"name": "list_alerts", "description": "List all fired alerts with severity, service, and timestamp.", "parameters": {}},
+    {
+        "name": "list_alerts",
+        "description": "List all fired alerts with severity, service, and timestamp.",
+        "parameters": {},
+    },
     {"name": "list_services", "description": "Show the service topology including dependencies.", "parameters": {}},
-    {"name": "query_metrics", "description": "Query time-series metrics for a service over a time range.",
-     "parameters": {"service": {"type": "string"}, "time_start": {"type": "integer"}, "time_end": {"type": "integer"}}, "required": ["service"]},
-    {"name": "query_logs", "description": "Query structured logs for a service over a time range.",
-     "parameters": {"service": {"type": "string"}, "time_start": {"type": "integer"}, "time_end": {"type": "integer"}}, "required": ["service"]},
-    {"name": "query_traces", "description": "Query distributed traces involving a specific service.",
-     "parameters": {"service": {"type": "string"}}, "required": ["service"]},
-    {"name": "diagnose", "description": "Submit a root cause diagnosis from the taxonomy.",
-     "parameters": {"diagnosis": {"type": "string"}}, "required": ["diagnosis"]},
-    {"name": "remediate", "description": "Propose a remediation action.",
-     "parameters": {"action": {"type": "string"}}, "required": ["action"]},
+    {
+        "name": "query_metrics",
+        "description": "Query time-series metrics for a service over a time range.",
+        "parameters": {
+            "service": {"type": "string"},
+            "time_start": {"type": "integer"},
+            "time_end": {"type": "integer"},
+        },
+        "required": ["service"],
+    },
+    {
+        "name": "query_logs",
+        "description": "Query structured logs for a service over a time range.",
+        "parameters": {
+            "service": {"type": "string"},
+            "time_start": {"type": "integer"},
+            "time_end": {"type": "integer"},
+        },
+        "required": ["service"],
+    },
+    {
+        "name": "query_traces",
+        "description": "Query distributed traces involving a specific service.",
+        "parameters": {"service": {"type": "string"}},
+        "required": ["service"],
+    },
+    {
+        "name": "diagnose",
+        "description": "Submit a root cause diagnosis from the taxonomy.",
+        "parameters": {"diagnosis": {"type": "string"}},
+        "required": ["diagnosis"],
+    },
+    {
+        "name": "remediate",
+        "description": "Propose a remediation action.",
+        "parameters": {"action": {"type": "string"}},
+        "required": ["action"],
+    },
 ]
 
 
 @dataclass
 class ToolResult:
     """Result from a tool call, mirroring real observability tool responses."""
+
     tool_name: str
     observation: str
     step: int
@@ -136,42 +169,71 @@ class SREToolAdapter:
 
         match tool_name:
             case "list_alerts":
-                return {"action_type": ActionType.LIST_ALERTS, "target_service": 0,
-                        "time_start": 0, "time_end": max_time,
-                        "diagnosis_idx": 0, "remediation_idx": 0}
+                return {
+                    "action_type": ActionType.LIST_ALERTS,
+                    "target_service": 0,
+                    "time_start": 0,
+                    "time_end": max_time,
+                    "diagnosis_idx": 0,
+                    "remediation_idx": 0,
+                }
 
             case "list_services":
-                return {"action_type": ActionType.LIST_SERVICES, "target_service": 0,
-                        "time_start": 0, "time_end": max_time,
-                        "diagnosis_idx": 0, "remediation_idx": 0}
+                return {
+                    "action_type": ActionType.LIST_SERVICES,
+                    "target_service": 0,
+                    "time_start": 0,
+                    "time_end": max_time,
+                    "diagnosis_idx": 0,
+                    "remediation_idx": 0,
+                }
 
             case "query_metrics" | "query_logs":
                 svc_idx = self._resolve_service(kwargs.get("service", ""))
                 action_type = ActionType.QUERY_METRICS if tool_name == "query_metrics" else ActionType.QUERY_LOGS
-                return {"action_type": action_type, "target_service": svc_idx,
-                        "time_start": kwargs.get("time_start", 0),
-                        "time_end": kwargs.get("time_end", max_time),
-                        "diagnosis_idx": 0, "remediation_idx": 0}
+                return {
+                    "action_type": action_type,
+                    "target_service": svc_idx,
+                    "time_start": kwargs.get("time_start", 0),
+                    "time_end": kwargs.get("time_end", max_time),
+                    "diagnosis_idx": 0,
+                    "remediation_idx": 0,
+                }
 
             case "query_traces":
                 svc_idx = self._resolve_service(kwargs.get("service", ""))
-                return {"action_type": ActionType.QUERY_TRACES, "target_service": svc_idx,
-                        "time_start": 0, "time_end": max_time,
-                        "diagnosis_idx": 0, "remediation_idx": 0}
+                return {
+                    "action_type": ActionType.QUERY_TRACES,
+                    "target_service": svc_idx,
+                    "time_start": 0,
+                    "time_end": max_time,
+                    "diagnosis_idx": 0,
+                    "remediation_idx": 0,
+                }
 
             case "diagnose":
                 label = kwargs.get("diagnosis", "")
                 idx = self._resolve_diagnosis(label)
-                return {"action_type": ActionType.DIAGNOSE, "target_service": 0,
-                        "time_start": 0, "time_end": max_time,
-                        "diagnosis_idx": idx, "remediation_idx": 0}
+                return {
+                    "action_type": ActionType.DIAGNOSE,
+                    "target_service": 0,
+                    "time_start": 0,
+                    "time_end": max_time,
+                    "diagnosis_idx": idx,
+                    "remediation_idx": 0,
+                }
 
             case "remediate":
                 action_text = kwargs.get("action", "")
                 idx = self._resolve_remediation(action_text)
-                return {"action_type": ActionType.REMEDIATE, "target_service": 0,
-                        "time_start": 0, "time_end": max_time,
-                        "diagnosis_idx": 0, "remediation_idx": idx}
+                return {
+                    "action_type": ActionType.REMEDIATE,
+                    "target_service": 0,
+                    "time_start": 0,
+                    "time_end": max_time,
+                    "diagnosis_idx": 0,
+                    "remediation_idx": idx,
+                }
 
             case _:
                 raise ValueError(f"Unknown tool: {tool_name}. Available: {[t['name'] for t in TOOL_DEFINITIONS]}")

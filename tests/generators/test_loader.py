@@ -1,6 +1,7 @@
 """Tests for scenario loader."""
 
 import pytest
+
 from src.generators.loader import ScenarioLoader
 
 
@@ -15,7 +16,7 @@ def test_load_all_finds_scenarios(loader):
 
 
 def test_load_single_scenario(loader):
-    scenarios = loader.load_all()
+    loader.load_all()
     path = "scenarios/db_connection_pool.yaml"
     scenario = loader.load(path)
     assert scenario.id == "scenario-db-conn-pool-001"

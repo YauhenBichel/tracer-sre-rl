@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.constants import METRIC_CONNECTION
+
 from .base import EventEffectHandler
 
 MAX_CONN_UTILISATION = 0.98
@@ -8,7 +9,6 @@ DEFAULT_MAX_CONNECTIONS = 100
 
 
 class ConnectionExhaustionEffect(EventEffectHandler):
-
     def apply(self, base_value, metric_name, service, event, progress):
         if METRIC_CONNECTION in metric_name:
             max_conn = service.config.get("max_connections", DEFAULT_MAX_CONNECTIONS)

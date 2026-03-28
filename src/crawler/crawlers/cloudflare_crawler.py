@@ -8,6 +8,7 @@ import requests
 
 from src.crawler.models import IncidentCrawler, NormalisedIncident
 from src.utils.datetime_utils import DateTimeUtils
+
 from .quality import quality_score
 
 logger = logging.getLogger(__name__)

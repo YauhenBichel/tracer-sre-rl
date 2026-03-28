@@ -7,8 +7,8 @@ import random
 
 from src.config import metric_baselines
 from src.constants import EVENT_CASCADE, METRIC_PERCENT, SERVICE_TYPE_APPLICATION
-from src.models import MetricSample, ServiceDefinition, TimelineEntry
 from src.generators.effects.registry import EventEffectRegistry
+from src.models import MetricSample, ServiceDefinition, TimelineEntry
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +18,13 @@ PERCENT_METRIC_CAP = 100
 
 
 class MetricsGenerator:
-
     def __init__(self, rng: random.Random, effects: EventEffectRegistry):
         self._rng = rng
         self._effects = effects
 
-    def generate(self, service: ServiceDefinition, timestamp: int,
-                 active_events: list[TimelineEntry]) -> list[MetricSample]:
+    def generate(
+        self, service: ServiceDefinition, timestamp: int, active_events: list[TimelineEntry]
+    ) -> list[MetricSample]:
         baselines = metric_baselines().get(service.service_type, metric_baselines().get(SERVICE_TYPE_APPLICATION, {}))
         if not baselines:
             logger.warning("No baselines for service type '%s', skipping metrics", service.service_type)
@@ -36,17 +36,20 @@ class MetricsGenerator:
             value = self._apply_effects(value, name, service, active_events, timestamp)
             if METRIC_PERCENT in name:
                 value = min(value, PERCENT_METRIC_CAP)
-            samples.append(MetricSample(
-                timestamp=float(timestamp),
-                service=service.name,
-                metric_name=name,
-                value=round(max(0, value), 3),
-                labels={"service_type": service.service_type},
-            ))
+            samples.append(
+                MetricSample(
+                    timestamp=float(timestamp),
+                    service=service.name,
+                    metric_name=name,
+                    value=round(max(0, value), 3),
+                    labels={"service_type": service.service_type},
+                )
+            )
         return samples
 
-    def _apply_effects(self, value: float, metric: str, service: ServiceDefinition,
-                       events: list[TimelineEntry], timestamp: int) -> float:
+    def _apply_effects(
+        self, value: float, metric: str, service: ServiceDefinition, events: list[TimelineEntry], timestamp: int
+    ) -> float:
         for event in events:
             if not _event_affects_service(event, service):
                 continue

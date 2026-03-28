@@ -10,20 +10,24 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from src.crawler.models import NormalisedIncident
 from src.models import (
-    GoldStandardRemediation, GoldStandardRootCause,
-    ScenarioDefinition, ServiceDefinition, TimelineEntry,
+    GoldStandardRemediation,
+    GoldStandardRootCause,
+    ScenarioDefinition,
+    ServiceDefinition,
+    TimelineEntry,
 )
 from src.taxonomy import build_default_taxonomy
 
 logger = logging.getLogger(__name__)
 
 # Default topology templates per failure category
-_SERVICE_TOPOLOGIES = {
+_SERVICE_TOPOLOGIES: dict[str, list[dict[str, Any]]] = {
     "infrastructure.database": [
         {"name": "api-gateway", "service_type": "web-server", "dependencies": ["app-service"]},
         {"name": "app-service", "service_type": "application", "dependencies": ["database-primary"]},
@@ -53,50 +57,169 @@ _SERVICE_TOPOLOGIES = {
     ],
 }
 
-DEFAULT_TOPOLOGY = _SERVICE_TOPOLOGIES["operational"]
+DEFAULT_TOPOLOGY: list[dict[str, Any]] = _SERVICE_TOPOLOGIES["operational"]
 
 # Maps taxonomy leaf nodes to timeline event templates
 _EVENT_TEMPLATES = {
     "infrastructure.database.connection_pool": [
         {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
-        {"time_offset_seconds": 300, "event_type": "traffic_ramp", "params": {"multiplier": 3.0, "duration_seconds": 600}, "description": "Traffic spike begins"},
-        {"time_offset_seconds": 420, "event_type": "connection_exhaustion", "service": "database-primary", "params": {"duration_seconds": 480}, "description": "Connection pool saturating"},
-        {"time_offset_seconds": 500, "event_type": "error_spike", "service": "app-service", "params": {"target_rate": 0.3, "duration_seconds": 400}, "description": "Application errors from connection failures"},
-        {"time_offset_seconds": 540, "event_type": "alert", "service": "database-primary", "params": {"alert_name": "Connection Pool Exhaustion", "severity": "critical"}, "description": "ALERT: Database connection pool exhausted"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "traffic_ramp",
+            "params": {"multiplier": 3.0, "duration_seconds": 600},
+            "description": "Traffic spike begins",
+        },
+        {
+            "time_offset_seconds": 420,
+            "event_type": "connection_exhaustion",
+            "service": "database-primary",
+            "params": {"duration_seconds": 480},
+            "description": "Connection pool saturating",
+        },
+        {
+            "time_offset_seconds": 500,
+            "event_type": "error_spike",
+            "service": "app-service",
+            "params": {"target_rate": 0.3, "duration_seconds": 400},
+            "description": "Application errors from connection failures",
+        },
+        {
+            "time_offset_seconds": 540,
+            "event_type": "alert",
+            "service": "database-primary",
+            "params": {"alert_name": "Connection Pool Exhaustion", "severity": "critical"},
+            "description": "ALERT: Database connection pool exhausted",
+        },
     ],
     "infrastructure.network.dns": [
         {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
-        {"time_offset_seconds": 300, "event_type": "latency_spike", "service": "app-service", "params": {"factor": 5.0, "duration_seconds": 600}, "description": "DNS resolution failures causing timeouts"},
-        {"time_offset_seconds": 360, "event_type": "error_spike", "service": "app-service", "params": {"target_rate": 0.4, "duration_seconds": 540}, "description": "Failed DNS lookups"},
-        {"time_offset_seconds": 400, "event_type": "alert", "service": "app-service", "params": {"alert_name": "High Error Rate", "severity": "critical"}, "description": "ALERT: Service error rate above threshold"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "latency_spike",
+            "service": "app-service",
+            "params": {"factor": 5.0, "duration_seconds": 600},
+            "description": "DNS resolution failures causing timeouts",
+        },
+        {
+            "time_offset_seconds": 360,
+            "event_type": "error_spike",
+            "service": "app-service",
+            "params": {"target_rate": 0.4, "duration_seconds": 540},
+            "description": "Failed DNS lookups",
+        },
+        {
+            "time_offset_seconds": 400,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "High Error Rate", "severity": "critical"},
+            "description": "ALERT: Service error rate above threshold",
+        },
     ],
     "infrastructure.storage.disk_full": [
         {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
-        {"time_offset_seconds": 60, "event_type": "disk_fill", "service": "database-primary", "params": {"target_percent": 98, "duration_seconds": 400}, "description": "Disk usage growing"},
-        {"time_offset_seconds": 420, "event_type": "latency_spike", "service": "database-primary", "params": {"factor": 10.0, "duration_seconds": 480}, "description": "Disk I/O saturated"},
-        {"time_offset_seconds": 480, "event_type": "error_spike", "service": "database-primary", "params": {"target_rate": 0.9, "duration_seconds": 420}, "description": "Write failures from full disk"},
-        {"time_offset_seconds": 520, "event_type": "alert", "service": "database-primary", "params": {"alert_name": "Disk Full", "severity": "critical"}, "description": "ALERT: Disk full"},
+        {
+            "time_offset_seconds": 60,
+            "event_type": "disk_fill",
+            "service": "database-primary",
+            "params": {"target_percent": 98, "duration_seconds": 400},
+            "description": "Disk usage growing",
+        },
+        {
+            "time_offset_seconds": 420,
+            "event_type": "latency_spike",
+            "service": "database-primary",
+            "params": {"factor": 10.0, "duration_seconds": 480},
+            "description": "Disk I/O saturated",
+        },
+        {
+            "time_offset_seconds": 480,
+            "event_type": "error_spike",
+            "service": "database-primary",
+            "params": {"target_rate": 0.9, "duration_seconds": 420},
+            "description": "Write failures from full disk",
+        },
+        {
+            "time_offset_seconds": 520,
+            "event_type": "alert",
+            "service": "database-primary",
+            "params": {"alert_name": "Disk Full", "severity": "critical"},
+            "description": "ALERT: Disk full",
+        },
     ],
     "application.memory.leak": [
         {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
-        {"time_offset_seconds": 120, "event_type": "memory_leak", "service": "app-service", "params": {"rate_per_minute": 3.0, "duration_seconds": 700}, "description": "Memory growing steadily"},
-        {"time_offset_seconds": 500, "event_type": "resource_exhaustion", "service": "app-service", "params": {"metric": "memory_percent", "ceiling": 95, "duration_seconds": 400}, "description": "OOM approaching"},
-        {"time_offset_seconds": 540, "event_type": "alert", "service": "app-service", "params": {"alert_name": "Memory Usage Critical", "severity": "warning"}, "description": "ALERT: High memory usage"},
+        {
+            "time_offset_seconds": 120,
+            "event_type": "memory_leak",
+            "service": "app-service",
+            "params": {"rate_per_minute": 3.0, "duration_seconds": 700},
+            "description": "Memory growing steadily",
+        },
+        {
+            "time_offset_seconds": 500,
+            "event_type": "resource_exhaustion",
+            "service": "app-service",
+            "params": {"metric": "memory_percent", "ceiling": 95, "duration_seconds": 400},
+            "description": "OOM approaching",
+        },
+        {
+            "time_offset_seconds": 540,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "Memory Usage Critical", "severity": "warning"},
+            "description": "ALERT: High memory usage",
+        },
     ],
     "application.dependency.cascading_failure": [
         {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
-        {"time_offset_seconds": 300, "event_type": "latency_spike", "service": "app-service", "params": {"factor": 15.0, "duration_seconds": 600}, "description": "Upstream dependency slow"},
-        {"time_offset_seconds": 400, "event_type": "cascade", "service": "api-gateway", "params": {"duration_seconds": 500}, "description": "Cascade propagating to API gateway"},
-        {"time_offset_seconds": 450, "event_type": "alert", "service": "api-gateway", "params": {"alert_name": "Cascading Failure Detected", "severity": "critical"}, "description": "ALERT: Multiple services degraded"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "latency_spike",
+            "service": "app-service",
+            "params": {"factor": 15.0, "duration_seconds": 600},
+            "description": "Upstream dependency slow",
+        },
+        {
+            "time_offset_seconds": 400,
+            "event_type": "cascade",
+            "service": "api-gateway",
+            "params": {"duration_seconds": 500},
+            "description": "Cascade propagating to API gateway",
+        },
+        {
+            "time_offset_seconds": 450,
+            "event_type": "alert",
+            "service": "api-gateway",
+            "params": {"alert_name": "Cascading Failure Detected", "severity": "critical"},
+            "description": "ALERT: Multiple services degraded",
+        },
     ],
 }
 
 # Fallback timeline for taxonomy labels without specific templates
 _GENERIC_TIMELINE = [
     {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
-    {"time_offset_seconds": 300, "event_type": "error_spike", "service": "app-service", "params": {"target_rate": 0.3, "duration_seconds": 600}, "description": "Service degradation begins"},
-    {"time_offset_seconds": 400, "event_type": "latency_spike", "service": "app-service", "params": {"factor": 5.0, "duration_seconds": 500}, "description": "Latency increasing"},
-    {"time_offset_seconds": 500, "event_type": "alert", "service": "app-service", "params": {"alert_name": "Service Degraded", "severity": "critical"}, "description": "ALERT: Service degraded"},
+    {
+        "time_offset_seconds": 300,
+        "event_type": "error_spike",
+        "service": "app-service",
+        "params": {"target_rate": 0.3, "duration_seconds": 600},
+        "description": "Service degradation begins",
+    },
+    {
+        "time_offset_seconds": 400,
+        "event_type": "latency_spike",
+        "service": "app-service",
+        "params": {"factor": 5.0, "duration_seconds": 500},
+        "description": "Latency increasing",
+    },
+    {
+        "time_offset_seconds": 500,
+        "event_type": "alert",
+        "service": "app-service",
+        "params": {"alert_name": "Service Degraded", "severity": "critical"},
+        "description": "ALERT: Service degraded",
+    },
 ]
 
 # Difficulty estimates by severity
@@ -175,7 +298,7 @@ class ScenarioGenerator:
                     return candidate
         return ""
 
-    def _pick_topology(self, taxonomy_label: str) -> list[dict]:
+    def _pick_topology(self, taxonomy_label: str) -> list[dict[str, Any]]:
         """Select a service topology template based on the taxonomy category."""
         if not taxonomy_label:
             return list(DEFAULT_TOPOLOGY)
@@ -188,17 +311,17 @@ class ScenarioGenerator:
         return list(DEFAULT_TOPOLOGY)
 
     @staticmethod
-    def _find_primary_service(services: list[dict], taxonomy_label: str) -> str:
+    def _find_primary_service(services: list[dict[str, Any]], taxonomy_label: str) -> str:
         """Determine which service is the primary failure target."""
         if "database" in taxonomy_label:
             for s in services:
                 if s["service_type"] == "database":
-                    return s["name"]
+                    return str(s["name"])
         if "network" in taxonomy_label or "application" in taxonomy_label:
             for s in services:
                 if s["service_type"] == "application":
-                    return s["name"]
-        return services[-1]["name"] if services else "app-service"
+                    return str(s["name"])
+        return str(services[-1]["name"]) if services else "app-service"
 
     def _build_timeline(self, taxonomy_label: str, primary_service: str) -> list[dict]:
         """Build event timeline from templates, substituting the primary service."""
@@ -233,24 +356,25 @@ class ScenarioGenerator:
         """Build gold standard section from incident data."""
         root_causes = []
         if taxonomy_label:
-            root_causes.append({
-                "taxonomy_label": taxonomy_label,
-                "relevance": DEFAULT_ROOT_CAUSE_RELEVANCE,
-                "evidence": [incident.summary] if incident.summary else [],
-            })
+            root_causes.append(
+                {
+                    "taxonomy_label": taxonomy_label,
+                    "relevance": DEFAULT_ROOT_CAUSE_RELEVANCE,
+                    "evidence": [incident.summary] if incident.summary else [],
+                }
+            )
 
-        remediations = []
-        for action in incident.remediation:
-            remediations.append({
-                "action": action,
-                "effectiveness": DEFAULT_REMEDIATION_EFFECTIVENESS,
-            })
+        remediations = [
+            {"action": action, "effectiveness": DEFAULT_REMEDIATION_EFFECTIVENESS} for action in incident.remediation
+        ]
         # Always include a generic remediation so the scenario is playable
         if not remediations:
-            remediations.append({
-                "action": "Investigate and remediate root cause",
-                "effectiveness": DEFAULT_REMEDIATION_EFFECTIVENESS,
-            })
+            remediations.append(
+                {
+                    "action": "Investigate and remediate root cause",
+                    "effectiveness": DEFAULT_REMEDIATION_EFFECTIVENESS,
+                }
+            )
 
         return {
             "root_causes": root_causes,
@@ -267,26 +391,36 @@ class ScenarioGenerator:
             description=data.get("description", ""),
             taxonomy_labels=tuple(data.get("taxonomy_labels", [])),
             services=tuple(
-                ServiceDefinition(name=s["name"], service_type=s["service_type"],
-                                  dependencies=tuple(s.get("dependencies", [])),
-                                  config=s.get("config", {}))
+                ServiceDefinition(
+                    name=s["name"],
+                    service_type=s["service_type"],
+                    dependencies=tuple(s.get("dependencies", [])),
+                    config=s.get("config", {}),
+                )
                 for s in data.get("services", [])
             ),
             timeline=tuple(
-                TimelineEntry(time_offset_seconds=t["time_offset_seconds"],
-                              event_type=t["event_type"], service=t.get("service"),
-                              params=t.get("params", {}), description=t.get("description", ""))
+                TimelineEntry(
+                    time_offset_seconds=t["time_offset_seconds"],
+                    event_type=t["event_type"],
+                    service=t.get("service"),
+                    params=t.get("params", {}),
+                    description=t.get("description", ""),
+                )
                 for t in data.get("timeline", [])
             ),
             gold_root_causes=tuple(
-                GoldStandardRootCause(taxonomy_label=rc["taxonomy_label"],
-                                     relevance=rc.get("relevance", DEFAULT_ROOT_CAUSE_RELEVANCE),
-                                     evidence=tuple(rc.get("evidence", [])))
+                GoldStandardRootCause(
+                    taxonomy_label=rc["taxonomy_label"],
+                    relevance=rc.get("relevance", DEFAULT_ROOT_CAUSE_RELEVANCE),
+                    evidence=tuple(rc.get("evidence", [])),
+                )
                 for rc in gold.get("root_causes", [])
             ),
             gold_remediations=tuple(
-                GoldStandardRemediation(action=r["action"],
-                                       effectiveness=r.get("effectiveness", DEFAULT_REMEDIATION_EFFECTIVENESS))
+                GoldStandardRemediation(
+                    action=r["action"], effectiveness=r.get("effectiveness", DEFAULT_REMEDIATION_EFFECTIVENESS)
+                )
                 for r in gold.get("remediations", [])
             ),
             difficulty=data.get("difficulty", DEFAULT_DIFFICULTY),
@@ -294,8 +428,7 @@ class ScenarioGenerator:
             episode_duration_seconds=data.get("episode_duration_seconds", 900),
         )
 
-    def batch_generate(self, incidents: list[NormalisedIncident],
-                       min_quality: float = 0.3) -> list[ScenarioDefinition]:
+    def batch_generate(self, incidents: list[NormalisedIncident], min_quality: float = 0.3) -> list[ScenarioDefinition]:
         """Convert a list of incidents to ScenarioDefinitions, filtering by quality."""
         results = []
         for incident in incidents:

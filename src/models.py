@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-
 # --- Enums ---
+
 
 class LogLevel(Enum):
     DEBUG = "DEBUG"
@@ -22,6 +22,7 @@ class SpanStatus(Enum):
 
 
 # --- Telemetry data ---
+
 
 @dataclass(frozen=True)
 class MetricSample:
@@ -73,6 +74,7 @@ class GeneratedTelemetry:
 
 # --- Scenario definition ---
 
+
 @dataclass(frozen=True)
 class ServiceDefinition:
     name: str
@@ -106,6 +108,7 @@ class GoldStandardRemediation:
 @dataclass(frozen=True)
 class AgentAction:
     """An action the agent takes in the SRE environment."""
+
     action_type: int
     target_service: int = 0
     time_start: int = 0

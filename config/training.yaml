@@ -1,0 +1,37 @@
+# Training configuration — edit this file to change datasets, agent, and parameters.
+# No code changes needed. Run: python run_training.py
+
+# ── Data sources ──────────────────────────────────────────────
+# All sources are combined. Comment out any line to disable it.
+sources:
+  # Hand-authored scenarios (always available, in repo)
+  builtin_scenarios: scenarios/
+
+  # Aiops-Dataset groundtruth CSV (241 labeled faults, 16 KB, in repo)
+  aiops_groundtruth: data/groundtruth-all.csv
+
+  # Crawled incidents from public APIs (run: make crawl)
+  # incident_db: data/incidents.db
+
+# ── Training parameters ──────────────────────────────────────
+episodes: 100
+max_difficulty: null  # null = all difficulties, 0.5 = easy only
+
+# ── Agent configuration ──────────────────────────────────────
+agent:
+  # Agent type: "random", "heuristic", "oracle"
+  #   random     — picks random actions (baseline lower bound)
+  #   heuristic  — systematic investigation, picks first diagnosis option
+  #   oracle     — systematic investigation, uses gold-standard labels (upper bound)
+  type: random
+
+# ── opensre integration ──────────────────────────────────────
+# To train opensre's LLM agent against simulated scenarios, use:
+#   PYTHONPATH="../opensre:." python -m src.integration.opensre_runner --use-opensre
+# This runs opensre's full LangGraph pipeline (requires opensre installed + LLM configured).
+# Trajectories are scored and can be exported for fine-tuning.
+
+# ── Export ────────────────────────────────────────────────────
+# Uncomment to auto-export trajectories after training
+# export_jsonl: training_data/trajectories.jsonl
+# export_pairs: training_data/pairs.jsonl

@@ -31,6 +31,7 @@ def test_step_result_defaults():
 
 def test_step_result_is_frozen():
     import pytest
+
     result = StepResult(reward=0.5, terminated=True)
     with pytest.raises(AttributeError):
         result.reward = 0.9

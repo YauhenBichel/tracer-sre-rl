@@ -1,6 +1,13 @@
 """Tests for YAML config loading."""
 
-from src.config import metric_baselines, base_latency_ms, log_templates, distractor_diagnoses, distractor_remediations, crawler_config
+from src.config import (
+    base_latency_ms,
+    crawler_config,
+    distractor_diagnoses,
+    distractor_remediations,
+    log_templates,
+    metric_baselines,
+)
 
 
 def test_metric_baselines_loads():

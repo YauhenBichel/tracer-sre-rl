@@ -13,7 +13,6 @@ MAX_TRACE_RESULTS = 10
 
 
 class TelemetryFormatter:
-
     def __init__(self, telemetry: GeneratedTelemetry, scenario: ScenarioDefinition):
         self._telemetry = telemetry
         self._scenario = scenario
@@ -54,21 +53,24 @@ class TelemetryFormatter:
 
         lines = [f"=== Metrics for {service} [{t_start}s - {t_end}s] ==="]
         for name, values in sorted(grouped.items()):
-            lines.append(f"  {name}: avg={sum(values)/len(values):.2f}, min={min(values):.2f}, max={max(values):.2f} ({len(values)} samples)")
+            lines.append(
+                f"  {name}: avg={sum(values) / len(values):.2f}, min={min(values):.2f}, max={max(values):.2f} ({len(values)} samples)"
+            )
         return "\n".join(lines)
 
     def logs(self, service: str, start_idx: int, end_idx: int) -> str:
         t_start, t_end = self._time_range(start_idx, end_idx)
         entries = sorted(
             (log for log in self._telemetry.logs if log.service == service and t_start <= log.timestamp <= t_end),
-            key=lambda l: l.timestamp,
+            key=lambda entry: entry.timestamp,
         )
         if not entries:
             return f"No logs found for {service} in [{t_start}s, {t_end}s]"
 
         lines = [f"=== Logs for {service} [{t_start}s - {t_end}s] ==="]
-        for entry in entries[:MAX_LOG_RESULTS]:
-            lines.append(f"  [{entry.timestamp:.0f}s] [{entry.level.value}] {entry.message}")
+        lines.extend(
+            f"  [{entry.timestamp:.0f}s] [{entry.level.value}] {entry.message}" for entry in entries[:MAX_LOG_RESULTS]
+        )
         if len(entries) > MAX_LOG_RESULTS:
             lines.append(f"  ... and {len(entries) - MAX_LOG_RESULTS} more entries")
         return "\n".join(lines)
@@ -86,7 +88,9 @@ class TelemetryFormatter:
         for trace_id, trace_spans in list(grouped.items())[:MAX_TRACE_RESULTS]:
             total = sum(s.duration_ms for s in trace_spans)
             has_error = any(s.status == SpanStatus.ERROR for s in trace_spans)
-            lines.append(f"  Trace {trace_id[:8]}...: {len(trace_spans)} spans, total={total:.1f}ms, status={'ERROR' if has_error else 'OK'}")
+            lines.append(
+                f"  Trace {trace_id[:8]}...: {len(trace_spans)} spans, total={total:.1f}ms, status={'ERROR' if has_error else 'OK'}"
+            )
             for span in sorted(trace_spans, key=lambda s: s.start_time):
                 status = "ERROR" if span.status == SpanStatus.ERROR else "ok"
                 lines.append(f"    [{span.service}] {span.operation} {span.duration_ms:.1f}ms {status}")
@@ -100,8 +104,10 @@ class TelemetryFormatter:
         if not alert_events:
             return "No alerts fired."
         lines = ["=== Fired Alerts ==="]
-        for a in alert_events:
-            lines.append(f"  [{a.timestamp:.0f}s] [{a.metadata.get(META_SEVERITY, '?')}] {a.service}: {a.metadata.get(META_ALERT_NAME, a.description)}")
+        lines.extend(
+            f"  [{a.timestamp:.0f}s] [{a.metadata.get(META_SEVERITY, '?')}] {a.service}: {a.metadata.get(META_ALERT_NAME, a.description)}"
+            for a in alert_events
+        )
         return "\n".join(lines)
 
     def _time_range(self, start_idx: int, end_idx: int) -> tuple[int, int]:

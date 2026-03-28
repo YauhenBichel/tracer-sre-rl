@@ -1,6 +1,7 @@
 """Tests for incident repository."""
 
 import pytest
+
 from src.crawler.models import NormalisedIncident
 from src.crawler.repository.sqlite_repository import SqliteIncidentRepository
 

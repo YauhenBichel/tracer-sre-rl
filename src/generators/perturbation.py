@@ -38,10 +38,7 @@ def perturb_scenario(scenario: ScenarioDefinition, rng: random.Random) -> Scenar
     duration_scale = rng.uniform(DURATION_SCALE_MIN, DURATION_SCALE_MAX)
     new_duration = max(300, int(scenario.episode_duration_seconds * duration_scale))
 
-    new_timeline = tuple(
-        _perturb_event(entry, rng, new_duration)
-        for entry in scenario.timeline
-    )
+    new_timeline = tuple(_perturb_event(entry, rng, new_duration) for entry in scenario.timeline)
 
     return replace(
         scenario,

@@ -16,16 +16,25 @@ Key compatibility requirements:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Literal
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from src.agent_adapter import SREToolAdapter
 
 # Mirror EvidenceSource from app.agent.state
 EvidenceSource = Literal[
-    "storage", "batch", "tracer_web", "cloudwatch",
-    "aws_sdk", "knowledge", "grafana", "datadog",
-    "eks", "github", "sentry",
+    "storage",
+    "batch",
+    "tracer_web",
+    "cloudwatch",
+    "aws_sdk",
+    "knowledge",
+    "grafana",
+    "datadog",
+    "eks",
+    "github",
+    "sentry",
 ]
 
 # Key used in available_sources to hold simulated env config
@@ -38,6 +47,7 @@ class SimulatedAction:
 
     See: app/agent/tools/tool_actions/investigation_registry/models.py
     """
+
     name: str
     description: str
     inputs: dict[str, str]
@@ -88,9 +98,7 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_empty,
-            function=lambda **_: _format_grafana_result(
-                adapter.call_tool("list_alerts"), "alerts"
-            ),
+            function=lambda **_: _format_grafana_result(adapter.call_tool("list_alerts"), "alerts"),
         ),
         SimulatedAction(
             name="get_service_topology",
@@ -102,9 +110,7 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_empty,
-            function=lambda **_: _format_grafana_result(
-                adapter.call_tool("list_services"), "topology"
-            ),
+            function=lambda **_: _format_grafana_result(adapter.call_tool("list_services"), "topology"),
         ),
         SimulatedAction(
             name="get_metrics",
@@ -120,13 +126,15 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_service,
-            function=lambda service_name="", time_range_start=0, time_range_end=89, **_:
-                _format_grafana_result(
-                    adapter.call_tool("query_metrics", service=service_name,
-                                     time_start=int(time_range_start),
-                                     time_end=int(time_range_end)),
-                    "metrics",
+            function=lambda service_name="", time_range_start=0, time_range_end=89, **_: _format_grafana_result(
+                adapter.call_tool(
+                    "query_metrics",
+                    service=service_name,
+                    time_start=int(time_range_start),
+                    time_end=int(time_range_end),
                 ),
+                "metrics",
+            ),
         ),
         SimulatedAction(
             name="get_error_logs",
@@ -142,12 +150,11 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             source="cloudwatch",
             availability_check=_sim_available,
             parameter_extractor=_extract_service,
-            function=lambda service_name="", time_range_start=0, time_range_end=89, **_:
-                _format_cloudwatch_result(
-                    adapter.call_tool("query_logs", service=service_name,
-                                     time_start=int(time_range_start),
-                                     time_end=int(time_range_end)),
+            function=lambda service_name="", time_range_start=0, time_range_end=89, **_: _format_cloudwatch_result(
+                adapter.call_tool(
+                    "query_logs", service=service_name, time_start=int(time_range_start), time_end=int(time_range_end)
                 ),
+            ),
         ),
         SimulatedAction(
             name="get_traces",
@@ -159,10 +166,9 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             source="datadog",
             availability_check=_sim_available,
             parameter_extractor=_extract_service_only,
-            function=lambda service_name="", **_:
-                _format_datadog_result(
-                    adapter.call_tool("query_traces", service=service_name),
-                ),
+            function=lambda service_name="", **_: _format_datadog_result(
+                adapter.call_tool("query_traces", service=service_name),
+            ),
         ),
     ]
 

@@ -8,14 +8,13 @@ Two penalties:
 from __future__ import annotations
 
 from src.config import reward_config
-from src.environment.actions import ActionType, QUERY_ACTIONS
+from src.environment.actions import QUERY_ACTIONS, ActionType
 
 _QUERY_ACTION_NAMES = frozenset(a.name for a in QUERY_ACTIONS)
 _DIAGNOSE_ACTION_NAME = ActionType.DIAGNOSE.name
 
 
 class SafetyScorer:
-
     def __init__(self):
         cfg = reward_config()["safety"]
         self._min_queries: int = cfg["min_queries_before_diagnosis"]

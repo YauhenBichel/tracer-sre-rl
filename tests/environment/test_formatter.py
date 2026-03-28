@@ -1,9 +1,10 @@
 """Tests for TelemetryFormatter."""
 
 import pytest
+
+from src.environment.formatter import TelemetryFormatter
 from src.generators.loader import ScenarioLoader
 from src.generators.telemetry import TelemetryGenerator
-from src.environment.formatter import TelemetryFormatter
 
 
 @pytest.fixture

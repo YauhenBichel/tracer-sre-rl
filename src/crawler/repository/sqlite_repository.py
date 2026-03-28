@@ -6,14 +6,16 @@ See incident_repository.py for the interface contract.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import asdict
 
 from src.crawler.models import NormalisedIncident
 
+logger = logging.getLogger(__name__)
+
 
 class SqliteIncidentRepository:
-
     def __init__(self, db_path: str = "incidents.db"):
         self._conn = sqlite3.connect(db_path)
         self._ensure_schema()
@@ -21,12 +23,20 @@ class SqliteIncidentRepository:
     def save(self, incident: NormalisedIncident) -> None:
         self._conn.execute(
             "INSERT OR REPLACE INTO incidents (id, source, title, data, ingested_at, quality_score) VALUES (?, ?, ?, ?, ?, ?)",
-            (incident.id, incident.source, incident.title, json.dumps(asdict(incident)), incident.ingested_at, incident.quality_score),
+            (
+                incident.id,
+                incident.source,
+                incident.title,
+                json.dumps(asdict(incident)),
+                incident.ingested_at,
+                incident.quality_score,
+            ),
         )
         self._conn.commit()
 
     def count(self) -> int:
-        return self._conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
+        row = self._conn.execute("SELECT COUNT(*) FROM incidents").fetchone()
+        return int(row[0]) if row else 0
 
     def count_by_source(self) -> dict[str, int]:
         return dict(self._conn.execute("SELECT source, COUNT(*) FROM incidents GROUP BY source").fetchall())
@@ -34,7 +44,13 @@ class SqliteIncidentRepository:
     def load_all(self) -> list[NormalisedIncident]:
         """Load all incidents from the database."""
         rows = self._conn.execute("SELECT data FROM incidents ORDER BY ingested_at DESC").fetchall()
-        return [NormalisedIncident(**json.loads(row[0])) for row in rows]
+        results = []
+        for row in rows:
+            try:
+                results.append(NormalisedIncident(**json.loads(row[0])))
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                logger.warning("Skipping malformed incident record: %s", e)
+        return results
 
     def close(self) -> None:
         self._conn.close()

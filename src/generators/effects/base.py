@@ -8,8 +8,7 @@ from src.models import ServiceDefinition, TimelineEntry
 
 
 class EventEffectHandler(ABC):
-
     @abstractmethod
-    def apply(self, base_value: float, metric_name: str, service: ServiceDefinition,
-              event: TimelineEntry, progress: float) -> float | None:
-        ...
+    def apply(
+        self, base_value: float, metric_name: str, service: ServiceDefinition, event: TimelineEntry, progress: float
+    ) -> float | None: ...

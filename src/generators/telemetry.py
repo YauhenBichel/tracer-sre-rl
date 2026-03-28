@@ -5,18 +5,17 @@ from __future__ import annotations
 import random
 
 from src.constants import SYSTEM_EVENT_TYPES
-from src.models import Event, GeneratedTelemetry, ScenarioDefinition, TimelineEntry
 from src.generators.effects.registry import build_default_registry
-from src.generators.metrics import MetricsGenerator
 from src.generators.logs import LogGenerator
+from src.generators.metrics import MetricsGenerator
 from src.generators.traces import TraceGenerator
+from src.models import Event, GeneratedTelemetry, ScenarioDefinition, TimelineEntry
 
 METRIC_INTERVAL_SECONDS = 10
 TRACE_SAMPLE_RATE = 0.3
 
 
 class TelemetryGenerator:
-
     def __init__(self, seed: int | None = None):
         self._rng = random.Random(seed)
         effects = build_default_registry()
@@ -50,7 +49,8 @@ class TelemetryGenerator:
     @staticmethod
     def _active_events(timeline: tuple[TimelineEntry, ...], ts: int) -> list[TimelineEntry]:
         return [
-            e for e in timeline
+            e
+            for e in timeline
             if e.time_offset_seconds <= ts <= e.time_offset_seconds + e.params.get("duration_seconds", float("inf"))
         ]
 
@@ -64,5 +64,6 @@ class TelemetryGenerator:
                 description=e.description,
                 metadata=e.params,
             )
-            for e in timeline if e.event_type in SYSTEM_EVENT_TYPES
+            for e in timeline
+            if e.event_type in SYSTEM_EVENT_TYPES
         )
