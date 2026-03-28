@@ -157,7 +157,7 @@ Measured on Apple M-series laptop, single core:
 | **Full episode (random agent)** | 29ms per episode | Includes generation + 5-15 agent steps + reward computation. |
 | **Memory per episode** | 2.5MB | Telemetry held in memory (tuples of frozen dataclasses). No accumulation across episodes. |
 | **Throughput** | 120,000 episodes/hour | Single CPU core, random agent. With LLM agent (~200ms/step × 10 steps), drops to ~1,800 eps/hr per GPU. |
-| **Test suite** | 155 tests in 3.1 seconds | Full coverage of all components. |
+| **Test suite** | 161 tests in 3.1 seconds | Full coverage of all components. |
 
 ### At Scale (100K training episodes)
 
@@ -187,7 +187,7 @@ git clone <repo-url>
 cd tracer-sre-rl
 pip install -r requirements.txt
 
-# Run tests (155 tests, ~3 seconds)
+# Run tests (161 tests, ~3 seconds)
 python -m pytest tests/ -v
 
 # Run baseline comparison (3 agents × 5 scenarios)
@@ -216,11 +216,21 @@ PYTHONPATH="../opensre:." python -m src.integration.opensre_runner --use-opensre
 ### Docker
 
 ```bash
-docker compose up tests       # Run test suite
-docker compose up sre-rl-env  # Run baseline comparison
-docker compose up training    # Run training loop
-docker compose up crawler     # Crawl incident data
+docker compose up test          # Run 161 tests
+docker compose up demo          # Baseline comparison
+docker compose up train         # Train (reads config/training.yaml)
+docker compose up train-export  # Train + export JSONL trajectories
+docker compose up crawl         # Crawl incident data
 ```
+
+### CI
+
+GitHub Actions runs on every PR to `main` and every push to `main`:
+- Tests on Python 3.11 + 3.12
+- Demo smoke test (full episode pipeline)
+- Training smoke test (scenario loading + episode execution)
+
+See `.github/workflows/ci.yml`.
 
 ## Limitations and Honest Gaps
 

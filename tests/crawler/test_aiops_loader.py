@@ -32,6 +32,7 @@ def test_load_groundtruth():
         ]
     )
     incidents = load_aiops_groundtruth(path)
+
     assert len(incidents) == 2
     assert incidents[0].source == "aiops_dataset"
     assert "CPU" in incidents[0].title
@@ -95,6 +96,7 @@ def test_real_groundtruth_file():
         return  # skip if not downloaded
 
     incidents = load_aiops_groundtruth(str(path))
+
     assert len(incidents) == 241
     assert all(i.source == "aiops_dataset" for i in incidents)
     assert all(len(i.taxonomy_labels) > 0 for i in incidents)

@@ -19,6 +19,7 @@ def test_perturbation_changes_timing():
     # At least some timeline entries should have different offsets
     original_offsets = [e.time_offset_seconds for e in scenario.timeline]
     perturbed_offsets = [e.time_offset_seconds for e in perturbed.timeline]
+
     assert original_offsets != perturbed_offsets
 
 
@@ -46,6 +47,7 @@ def test_different_seeds_produce_different_perturbations():
 
     offsets1 = [e.time_offset_seconds for e in p1.timeline]
     offsets2 = [e.time_offset_seconds for e in p2.timeline]
+
     assert offsets1 != offsets2
 
 
@@ -54,6 +56,7 @@ def test_perturbation_keeps_events_within_episode():
     rng = random.Random(42)
     perturbed = perturb_scenario(scenario, rng)
 
+    assert len(perturbed.timeline) > 0
     for entry in perturbed.timeline:
         assert 0 <= entry.time_offset_seconds < perturbed.episode_duration_seconds
 
@@ -65,4 +68,5 @@ def test_perturbation_preserves_event_types():
 
     original_types = [e.event_type for e in scenario.timeline]
     perturbed_types = [e.event_type for e in perturbed.timeline]
+
     assert original_types == perturbed_types

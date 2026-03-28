@@ -1,4 +1,4 @@
-.PHONY: install test demo train train-real crawl update-data export lint format typecheck security check clean help
+.PHONY: install test demo train train-real crawl update-data export lint format typecheck security dry aaa check clean help
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -35,8 +35,17 @@ update-data:  ## Re-crawl incidents and refresh dataset
 	@echo "  incident_db: data/incidents.db"
 	@echo "Then: make train"
 
+learn:  ## Run Q-learning agent — shows reward improving over episodes
+	python run_learning.py --episodes 500
+
 export:  ## Export training trajectories as JSONL
 	python run_training.py --export training_data/trajectories.jsonl
+
+finetune:  ## Fine-tune LLM on exported trajectories (dry run without GPU)
+	python run_finetune.py
+
+validate:  ## Run sim-to-real validation against Aiops-Dataset telemetry
+	python -m src.training.sim_to_real
 
 lint:  ## Run ruff linter
 	ruff check src/ tests/
@@ -56,11 +65,19 @@ typecheck:  ## Run mypy static type analysis
 security:  ## Run bandit security scan
 	bandit -r src/ -c pyproject.toml
 
-check:  ## Run all checks (lint + format + typecheck + security)
+dry:  ## Check for duplicate code (DRY)
+	pylint --disable=all --enable=R0801 --min-similarity-lines=6 src/
+
+aaa:  ## Check tests follow Arrange-Act-Assert pattern
+	python scripts/check_aaa.py
+
+check:  ## Run all checks (lint + format + typecheck + security + DRY + AAA)
 	ruff check src/ tests/
 	ruff format --check src/ tests/
 	mypy src/
 	bandit -r src/ -c pyproject.toml
+	pylint --disable=all --enable=R0801 --min-similarity-lines=6 src/
+	python scripts/check_aaa.py
 
 clean:  ## Remove generated files
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true

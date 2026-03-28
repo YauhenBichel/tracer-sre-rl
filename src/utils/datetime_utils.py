@@ -14,7 +14,7 @@ class DateTimeUtils:
     @staticmethod
     def parse_iso(value: str) -> datetime:
         """Parse an ISO 8601 string, handling trailing 'Z' as UTC."""
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(value)
 
     @staticmethod
     def duration_minutes(start_iso: str, end_iso: str) -> int:

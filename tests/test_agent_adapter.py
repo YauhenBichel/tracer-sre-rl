@@ -11,6 +11,7 @@ def _load_scenario():
 def test_adapter_reset_returns_initial_alert():
     adapter = SREToolAdapter(_load_scenario(), seed=42)
     result = adapter.reset()
+
     assert result.tool_name == "initial_alert"
     assert len(result.observation) > 0
     assert result.step == 0
@@ -21,6 +22,7 @@ def test_adapter_list_alerts():
     adapter = SREToolAdapter(_load_scenario(), seed=42)
     adapter.reset()
     result = adapter.call_tool("list_alerts")
+
     assert "Alert" in result.observation or "alert" in result.observation.lower()
     assert result.step == 1
 
@@ -30,6 +32,7 @@ def test_adapter_query_metrics_by_service_name():
     adapter.reset()
     service = adapter.service_names[0]
     result = adapter.call_tool("query_metrics", service=service)
+
     assert "Metrics" in result.observation or "metrics" in result.observation.lower()
 
 
@@ -74,10 +77,12 @@ def test_adapter_partial_service_match():
     first_service = adapter.service_names[0]
     partial = first_service[:4]
     result = adapter.call_tool("query_metrics", service=partial)
+
     assert not result.done
 
 
 def test_tool_definitions_have_required_fields():
+    assert len(TOOL_DEFINITIONS) > 0
     for tool in TOOL_DEFINITIONS:
         assert "name" in tool
         assert "description" in tool
@@ -86,6 +91,7 @@ def test_tool_definitions_have_required_fields():
 
 def test_adapter_exposes_options():
     adapter = SREToolAdapter(_load_scenario(), seed=42)
+
     assert len(adapter.diagnosis_options) > 0
     assert len(adapter.remediation_options) > 0
     assert len(adapter.service_names) > 0

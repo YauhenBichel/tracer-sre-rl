@@ -12,6 +12,7 @@ from src.config import (
 
 def test_metric_baselines_loads():
     baselines = metric_baselines()
+
     assert "web-server" in baselines
     assert "application" in baselines
     assert "database" in baselines
@@ -48,6 +49,7 @@ def test_distractor_remediations():
 
 def test_crawler_config_loads():
     gcp = crawler_config("gcp")
+
     assert "url" in gcp
     assert "quality_fields" in gcp
 

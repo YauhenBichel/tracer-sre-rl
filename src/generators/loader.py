@@ -9,13 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from src.models import (
-    GoldStandardRemediation,
-    GoldStandardRootCause,
-    ScenarioDefinition,
-    ServiceDefinition,
-    TimelineEntry,
-)
+from src.models import ScenarioDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -61,48 +55,4 @@ class ScenarioLoader:
         if missing:
             raise ValueError(f"Scenario {source} missing required fields: {missing}")
 
-        gold = data.get("gold_standard", {})
-
-        return ScenarioDefinition(
-            id=data["id"],
-            name=data["name"],
-            description=data.get("description", ""),
-            taxonomy_labels=tuple(data.get("taxonomy_labels", [])),
-            services=tuple(
-                ServiceDefinition(
-                    name=s["name"],
-                    service_type=s["service_type"],
-                    dependencies=tuple(s.get("dependencies", [])),
-                    config=s.get("config", {}),
-                )
-                for s in data["services"]
-            ),
-            timeline=tuple(
-                TimelineEntry(
-                    time_offset_seconds=t["time_offset_seconds"],
-                    event_type=t["event_type"],
-                    service=t.get("service"),
-                    params=t.get("params", {}),
-                    description=t.get("description", ""),
-                )
-                for t in data["timeline"]
-            ),
-            gold_root_causes=tuple(
-                GoldStandardRootCause(
-                    taxonomy_label=rc["taxonomy_label"],
-                    relevance=rc["relevance"],
-                    evidence=tuple(rc.get("evidence", [])),
-                )
-                for rc in gold.get("root_causes", [])
-            ),
-            gold_remediations=tuple(
-                GoldStandardRemediation(
-                    action=r["action"],
-                    effectiveness=r["effectiveness"],
-                )
-                for r in gold.get("remediations", [])
-            ),
-            difficulty=data.get("difficulty", 0.5),
-            max_investigation_steps=data.get("max_investigation_steps", 20),
-            episode_duration_seconds=data.get("episode_duration_seconds", 900),
-        )
+        return ScenarioDefinition.from_dict(data)

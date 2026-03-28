@@ -130,7 +130,9 @@ def test_different_seeds_produce_different_telemetry():
 
 def test_all_scenarios_run_to_completion():
     """Every scenario YAML can be loaded and run without errors."""
-    for scenario in ScenarioLoader().load_all():
+    scenarios = ScenarioLoader().load_all()
+    assert len(scenarios) > 0
+    for scenario in scenarios:
         env = SREEnvironment(scenario=scenario, seed=42)
         _obs, _info = env.reset()
 

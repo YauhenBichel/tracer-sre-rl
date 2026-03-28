@@ -17,6 +17,12 @@ sources:
 episodes: 100
 max_difficulty: null  # null = all difficulties, 0.5 = easy only
 
+# ── Evaluation ───────────────────────────────────────────────
+# 20% of scenarios are held out for evaluation (never used during training).
+# eval_episodes controls how many episodes to run on the held-out set.
+# Change only if you have a specific reason — 20 is sufficient for most cases.
+eval_episodes: 20  # default: 20, not recommended to change
+
 # ── Agent configuration ──────────────────────────────────────
 agent:
   # Agent type: "random", "heuristic", "oracle"

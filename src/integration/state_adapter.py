@@ -200,7 +200,7 @@ def _map_root_cause_to_label(root_cause: str, category: str, scenario: ScenarioD
             if category.lower() in gold.taxonomy_label.lower():
                 return gold.taxonomy_label
 
-    return category if category else ""
+    return category or ""
 
 
 def _map_remediation(steps: list[str], scenario: ScenarioDefinition) -> str:
@@ -218,7 +218,7 @@ def _map_remediation(steps: list[str], scenario: ScenarioDefinition) -> str:
             best_score = matches
             best_match = gold.action
 
-    return best_match if best_match else (steps[0] if steps else "")
+    return best_match or (steps[0] if steps else "")
 
 
 def _build_action_history(executed_hypotheses: list[dict]) -> list[dict]:

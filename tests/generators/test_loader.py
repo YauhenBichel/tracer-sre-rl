@@ -19,12 +19,14 @@ def test_load_single_scenario(loader):
     loader.load_all()
     path = "scenarios/db_connection_pool.yaml"
     scenario = loader.load(path)
+
     assert scenario.id == "scenario-db-conn-pool-001"
     assert len(scenario.services) == 5
 
 
 def test_scenario_fields_are_tuples(loader):
     scenario = loader.load("scenarios/memory_leak.yaml")
+
     assert isinstance(scenario.services, tuple)
     assert isinstance(scenario.timeline, tuple)
     assert isinstance(scenario.gold_root_causes, tuple)
@@ -34,6 +36,8 @@ def test_scenario_fields_are_tuples(loader):
 
 def test_service_dependencies_are_tuples(loader):
     scenario = loader.load("scenarios/cascading_failure.yaml")
+
+    assert len(scenario.services) > 0
     for svc in scenario.services:
         assert isinstance(svc.dependencies, tuple)
 

@@ -44,6 +44,7 @@ def test_count_by_source(repo):
     repo.save(NormalisedIncident(id="b", source="gcp", source_url="", title="B", summary="", ingested_at=""))
     repo.save(NormalisedIncident(id="c", source="cloudflare", source_url="", title="C", summary="", ingested_at=""))
     counts = repo.count_by_source()
+
     assert counts["gcp"] == 2
     assert counts["cloudflare"] == 1
 

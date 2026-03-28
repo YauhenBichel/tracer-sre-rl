@@ -5,6 +5,7 @@ from src.environment.state import EpisodeState, StepResult
 
 def test_episode_state_initial_values():
     state = EpisodeState()
+
     assert state.step_count == 0
     assert not state.diagnosed
     assert not state.remediated
@@ -16,6 +17,7 @@ def test_record_action():
     state = EpisodeState()
     state.record_action(1, "QUERY_METRICS", "api-gateway")
     state.record_action(2, "DIAGNOSE", "api-gateway")
+
     assert len(state.action_history) == 2
     assert state.action_history[0]["action"] == "QUERY_METRICS"
     assert state.action_history[1]["step"] == 2
@@ -23,6 +25,7 @@ def test_record_action():
 
 def test_step_result_defaults():
     result = StepResult()
+
     assert result.reward == 0.0
     assert not result.terminated
     assert not result.truncated

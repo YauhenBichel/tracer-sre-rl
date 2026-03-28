@@ -33,7 +33,10 @@ def test_simulated_actions_have_parameter_extractor():
     scenario = _load_scenario()
     adapter = SREToolAdapter(scenario, seed=42)
     adapter.reset()
-    for action in create_simulated_actions(adapter):
+    actions = create_simulated_actions(adapter)
+
+    assert len(actions) > 0
+    for action in actions:
         assert action.parameter_extractor is not None, f"{action.name} has no parameter_extractor"
 
 
@@ -42,7 +45,10 @@ def test_simulated_actions_have_availability_check():
     scenario = _load_scenario()
     adapter = SREToolAdapter(scenario, seed=42)
     adapter.reset()
-    for action in create_simulated_actions(adapter):
+    actions = create_simulated_actions(adapter)
+
+    assert len(actions) > 0
+    for action in actions:
         assert action.availability_check is not None, f"{action.name} has no availability_check"
 
 
@@ -52,7 +58,10 @@ def test_availability_check_passes_with_simulated_sources():
     adapter = SREToolAdapter(scenario, seed=42)
     adapter.reset()
     sources = build_simulated_sources(adapter)
-    for action in create_simulated_actions(adapter):
+    actions = create_simulated_actions(adapter)
+
+    assert len(actions) > 0
+    for action in actions:
         assert action.availability_check(sources), f"{action.name} availability check failed"
 
 
@@ -62,7 +71,10 @@ def test_parameter_extractor_returns_dict():
     adapter = SREToolAdapter(scenario, seed=42)
     adapter.reset()
     sources = build_simulated_sources(adapter)
-    for action in create_simulated_actions(adapter):
+    actions = create_simulated_actions(adapter)
+
+    assert len(actions) > 0
+    for action in actions:
         kwargs = action.parameter_extractor(sources)
         assert isinstance(kwargs, dict), f"{action.name} extractor returned {type(kwargs)}"
 
@@ -74,7 +86,10 @@ def test_function_returns_opensre_format():
     adapter.reset()
     sources = build_simulated_sources(adapter)
 
-    for action in create_simulated_actions(adapter):
+    actions = create_simulated_actions(adapter)
+
+    assert len(actions) > 0
+    for action in actions:
         kwargs = action.parameter_extractor(sources)
         result = action.function(**kwargs)
         assert isinstance(result, dict), f"{action.name} returned {type(result)}"
@@ -89,6 +104,7 @@ def test_simulated_actions_cover_key_tools():
     adapter = SREToolAdapter(scenario, seed=42)
     adapter.reset()
     names = {a.name for a in create_simulated_actions(adapter)}
+
     assert "get_alerts" in names
     assert "get_service_topology" in names
     assert "get_metrics" in names
@@ -101,6 +117,7 @@ def test_simulated_sources_has_connection_verified():
     scenario = _load_scenario()
     adapter = SREToolAdapter(scenario, seed=42)
     sources = build_simulated_sources(adapter)
+
     assert sources[SIMULATED_SOURCE_KEY]["connection_verified"] is True
 
 
@@ -112,6 +129,7 @@ def test_agent_state_has_investigation_started_at():
     scenario = _load_scenario()
     adapter = SREToolAdapter(scenario, seed=42)
     state = scenario_to_agent_state(scenario, adapter)
+
     assert "investigation_started_at" in state
     assert isinstance(state["investigation_started_at"], float)
 
@@ -121,6 +139,7 @@ def test_agent_state_has_alert_json():
     scenario = _load_scenario()
     adapter = SREToolAdapter(scenario, seed=42)
     state = scenario_to_agent_state(scenario, adapter)
+
     assert "alert_json" in state
     assert isinstance(state["alert_json"], dict)
     assert "alert_name" in state["alert_json"]
@@ -131,8 +150,8 @@ def test_agent_state_has_resolved_integrations_with_endpoints():
     scenario = _load_scenario()
     adapter = SREToolAdapter(scenario, seed=42)
     state = scenario_to_agent_state(scenario, adapter)
-
     ri = state["resolved_integrations"]
+
     assert "grafana" in ri
     assert "endpoint" in ri["grafana"]
     assert "api_key" in ri["grafana"]
@@ -178,6 +197,8 @@ def test_agent_state_has_all_required_fields():
         "slack_context",
         "problem_md",
     ]
+
+    assert len(required_fields) > 0
     for field in required_fields:
         assert field in state, f"Missing required field: {field}"
 
@@ -201,6 +222,7 @@ def test_score_correct_diagnosis():
         ],
     }
     result = score_agent_state(state, scenario)
+
     assert result["reward"] > 0.5
 
 
@@ -213,6 +235,7 @@ def test_score_wrong_diagnosis():
         "executed_hypotheses": [{"action": "get_alerts", "service": "system"}],
     }
     result = score_agent_state(state, scenario)
+
     assert result["reward"] < 0.5
 
 
@@ -225,6 +248,7 @@ def test_score_empty_diagnosis():
         "executed_hypotheses": [],
     }
     result = score_agent_state(state, scenario)
+
     assert result["reward"] == 0.0
 
 
@@ -238,6 +262,7 @@ def test_full_integration_flow():
 
     # 1. Create state (what extract_alert node produces)
     state = scenario_to_agent_state(scenario, adapter)
+
     assert state["mode"] == "investigation"
 
     # 2. Create simulated actions + sources (what resolve_integrations produces)

@@ -21,6 +21,7 @@ def test_initial_observation_contains_alert(formatter):
 
 def test_topology_lists_services(formatter):
     text = formatter.topology()
+
     assert "Service Topology" in text
     assert "api-gateway" in text
     assert "postgres-primary" in text

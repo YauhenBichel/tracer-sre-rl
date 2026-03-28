@@ -27,6 +27,7 @@ def test_traffic_ramp_increases_request_rate(service, event):
     effect = TrafficRampEffect()
     event = TimelineEntry(time_offset_seconds=0, event_type="traffic_ramp", params={"multiplier": 3.0})
     result = effect.apply(100.0, "request_rate", service, event, progress=1.0)
+
     assert result == pytest.approx(300.0)
 
 
@@ -90,5 +91,7 @@ def test_default_registry_has_all_handlers():
         "disk_fill",
         "memory_leak",
     ]
+
+    assert len(expected) > 0
     for event_type in expected:
         assert registry.get(event_type) is not None, f"Missing handler for {event_type}"
