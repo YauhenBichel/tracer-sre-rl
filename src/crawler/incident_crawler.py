@@ -6,7 +6,7 @@ import logging
 
 from .crawlers import (
     IncidentCrawler, GCPIncidentCrawler, CloudflareIncidentCrawler,
-    GitHubPostmortemCrawler, VOIDIncidentCrawler,
+    GitHubPostmortemCrawler,
 )
 from .repository import IncidentRepository, SqliteIncidentRepository
 
@@ -16,7 +16,6 @@ DEFAULT_CRAWLERS: list[type[IncidentCrawler]] = [
     GCPIncidentCrawler,
     CloudflareIncidentCrawler,
     GitHubPostmortemCrawler,
-    VOIDIncidentCrawler,
 ]
 
 

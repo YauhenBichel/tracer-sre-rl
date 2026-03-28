@@ -31,19 +31,22 @@ All four are validated in the baseline comparison (random: 0.321, heuristic: 0.4
 
 ## What I Built
 
-### Component 1: Incident Data Crawler (Pillar 1)
+### Component 1: Incident Data Pipeline (Pillar 1 + 5)
 
-**What:** Five crawlers that fetch real incident data and normalise it into a common schema.
+**What:** Three API crawlers + one CSV loader that fetch real incident data, plus a scenario generator that converts them into playable RL episodes.
 
-**Why:** The RL environment needs realistic failure scenarios. Hand-authoring YAML files doesn't scale and produces unrealistic patterns. Real incidents from VOID, GCP, Cloudflare, GitHub post-mortems, and the Aiops-Dataset provide the ground truth.
+**Why:** Hand-authoring YAML scenarios doesn't scale (5 scenarios = 29% taxonomy coverage). Real incidents provide ground-truth failure patterns. The Aiops-Dataset groundtruth CSV (241 labeled faults from a 46-instance microservice system) is included in the repo at `data/groundtruth-all.csv` (16 KB). The crawlers fetch 261 more incidents from public APIs.
 
-**How:** Each crawler extends `IncidentCrawler` (ABC with shared `_fetch()` for HTTP requests). Each produces `NormalisedIncident` objects with: title, summary, timeline, root causes, affected services, taxonomy labels, quality score. Stored in SQLite via `IncidentRepository` (Protocol + SQLite implementation).
+**How the training data is generated:**
+1. `run_crawler.py` runs 3 crawlers (GCP, Cloudflare, GitHub) → 261 incidents → `data/incidents.db` (SQLite)
+2. `load_aiops_groundtruth("data/groundtruth-all.csv")` reads 241 labeled faults from the included CSV
+3. `ScenarioGenerator.batch_generate(incidents)` converts each incident to a `ScenarioDefinition` by picking a topology template, building an event timeline, and setting gold-standard root causes
+4. `EpisodeRunner` combines generated + builtin scenarios → 246+ total scenarios for training
 
 **Key files:**
 - `src/crawler/models.py` — `NormalisedIncident` dataclass + `IncidentCrawler` ABC
-- `src/crawler/crawlers/` — GCP, Cloudflare, GitHub, VOID, Aiops-Dataset implementations
-- `src/crawler/scenario_generator.py` — converts incidents to playable YAML scenarios
-- `src/generators/incident_replay.py` — `IncidentReplaySource` loads incidents and feeds the training loop
+- `src/crawler/crawlers/` — GCP, Cloudflare, GitHub crawlers + Aiops-Dataset CSV loader
+- `src/crawler/scenario_generator.py` — converts incidents to playable scenarios (`batch_generate()`, `generate_definition()`)
 
 ### Component 2: Synthetic Telemetry Generator (Pillar 3)
 
@@ -154,7 +157,7 @@ Measured on Apple M-series laptop, single core:
 | **Full episode (random agent)** | 29ms per episode | Includes generation + 5-15 agent steps + reward computation. |
 | **Memory per episode** | 2.5MB | Telemetry held in memory (tuples of frozen dataclasses). No accumulation across episodes. |
 | **Throughput** | 120,000 episodes/hour | Single CPU core, random agent. With LLM agent (~200ms/step × 10 steps), drops to ~1,800 eps/hr per GPU. |
-| **Test suite** | 152 tests in 3.1 seconds | Full coverage of all components. |
+| **Test suite** | 155 tests in 3.1 seconds | Full coverage of all components. |
 
 ### At Scale (100K training episodes)
 
@@ -184,7 +187,7 @@ git clone <repo-url>
 cd tracer-sre-rl
 pip install -r requirements.txt
 
-# Run tests (152 tests, ~3 seconds)
+# Run tests (155 tests, ~3 seconds)
 python -m pytest tests/ -v
 
 # Run baseline comparison (3 agents × 5 scenarios)

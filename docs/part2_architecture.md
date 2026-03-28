@@ -86,7 +86,7 @@ A scalable system that continuously generates high-fidelity failure scenarios fo
 
 **Ingestion → Classification → Scenario Generation → Training → Evaluation**
 
-**1. Ingestion.** Five crawlers fetch real incident data: VOID (~10K incidents from ~590 organisations), Aiops-Dataset (labeled fault scenarios from a 46-instance microservice system), GCP (5-year incident feed), Cloudflare (Statuspage API), GitHub post-mortems (~200 curated incidents). Each incident is normalised into a `NormalisedIncident` with: title, summary, timeline, root causes, affected services, taxonomy labels, quality score. Stored in SQLite.
+**1. Ingestion.** Four crawlers fetch real incident data: VOID (~10K incidents from ~590 organisations), Aiops-Dataset (labeled fault scenarios from a 46-instance microservice system), GCP (5-year incident feed), Cloudflare (Statuspage API), GitHub post-mortems (~200 curated incidents). Each incident is normalised into a `NormalisedIncident` with: title, summary, timeline, root causes, affected services, taxonomy labels, quality score. Stored in SQLite.
 
 **2. Classification.** Incidents are classified against the hierarchical taxonomy (35 leaf nodes across infrastructure, application, operational, external). Classification uses keyword pattern matching from `config/crawlers.yaml` and taxonomy label inheritance from the source data. Coverage gaps are tracked per taxonomy node.
 
@@ -492,7 +492,7 @@ GitHub post-mortems  ──┘    │                           │
                             └── set gold standard
 ```
 
-**Stage 1: Crawl and normalise.** Five crawlers (`GCPIncidentCrawler`, `CloudflareIncidentCrawler`, `GitHubPostmortemCrawler`, `VOIDIncidentCrawler`, `load_aiops_groundtruth`) fetch real incidents and normalise them into `NormalisedIncident` objects with: title, summary, timeline, root causes, affected services, taxonomy labels, quality score. Stored in SQLite.
+**Stage 1: Crawl and normalise.** Three crawlers (`GCPIncidentCrawler`, `CloudflareIncidentCrawler`, `GitHubPostmortemCrawler`) fetch real incidents from public APIs and normalise them into `NormalisedIncident` objects stored in SQLite (261 incidents, 288 KB). Additionally, `load_aiops_groundtruth()` reads the Aiops-Dataset groundtruth CSV — 241 labeled fault scenarios from a real 46-instance microservice system, included in the repo at `data/groundtruth-all.csv` (16 KB). Each incident has: title, summary, taxonomy labels, quality score.
 
 **Stage 2: Generate scenario YAML.** The `ScenarioGenerator` converts each `NormalisedIncident` into a playable scenario:
 

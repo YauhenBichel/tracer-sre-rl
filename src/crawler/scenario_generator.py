@@ -14,6 +14,10 @@ from pathlib import Path
 import yaml
 
 from src.crawler.models import NormalisedIncident
+from src.models import (
+    GoldStandardRemediation, GoldStandardRootCause,
+    ScenarioDefinition, ServiceDefinition, TimelineEntry,
+)
 from src.taxonomy import build_default_taxonomy
 
 logger = logging.getLogger(__name__)
@@ -252,3 +256,54 @@ class ScenarioGenerator:
             "root_causes": root_causes,
             "remediations": remediations,
         }
+
+    def generate_definition(self, incident: NormalisedIncident) -> ScenarioDefinition:
+        """Convert a single incident directly to an immutable ScenarioDefinition."""
+        data = self.generate(incident)
+        gold = data.get("gold_standard", {})
+        return ScenarioDefinition(
+            id=data["id"],
+            name=data["name"],
+            description=data.get("description", ""),
+            taxonomy_labels=tuple(data.get("taxonomy_labels", [])),
+            services=tuple(
+                ServiceDefinition(name=s["name"], service_type=s["service_type"],
+                                  dependencies=tuple(s.get("dependencies", [])),
+                                  config=s.get("config", {}))
+                for s in data.get("services", [])
+            ),
+            timeline=tuple(
+                TimelineEntry(time_offset_seconds=t["time_offset_seconds"],
+                              event_type=t["event_type"], service=t.get("service"),
+                              params=t.get("params", {}), description=t.get("description", ""))
+                for t in data.get("timeline", [])
+            ),
+            gold_root_causes=tuple(
+                GoldStandardRootCause(taxonomy_label=rc["taxonomy_label"],
+                                     relevance=rc.get("relevance", DEFAULT_ROOT_CAUSE_RELEVANCE),
+                                     evidence=tuple(rc.get("evidence", [])))
+                for rc in gold.get("root_causes", [])
+            ),
+            gold_remediations=tuple(
+                GoldStandardRemediation(action=r["action"],
+                                       effectiveness=r.get("effectiveness", DEFAULT_REMEDIATION_EFFECTIVENESS))
+                for r in gold.get("remediations", [])
+            ),
+            difficulty=data.get("difficulty", DEFAULT_DIFFICULTY),
+            max_investigation_steps=data.get("max_investigation_steps", 20),
+            episode_duration_seconds=data.get("episode_duration_seconds", 900),
+        )
+
+    def batch_generate(self, incidents: list[NormalisedIncident],
+                       min_quality: float = 0.3) -> list[ScenarioDefinition]:
+        """Convert a list of incidents to ScenarioDefinitions, filtering by quality."""
+        results = []
+        for incident in incidents:
+            if incident.quality_score < min_quality or not incident.taxonomy_labels:
+                continue
+            try:
+                results.append(self.generate_definition(incident))
+            except Exception as e:
+                logger.warning("Failed to generate scenario from %s: %s", incident.id, e)
+        logger.info("Generated %d scenarios from %d incidents", len(results), len(incidents))
+        return results

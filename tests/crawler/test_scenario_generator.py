@@ -135,3 +135,44 @@ def test_generate_yaml_header_contains_source():
 
     assert "Source: https://example.com/incident/1" in yaml_str
     assert "Quality score:" in yaml_str
+
+
+def test_generate_definition_returns_scenario():
+    gen = ScenarioGenerator()
+    scenario = gen.generate_definition(_make_incident())
+
+    assert scenario.id == "generated-test-001"
+    assert len(scenario.services) >= 2
+    assert len(scenario.timeline) >= 2
+    assert len(scenario.gold_root_causes) >= 1
+
+
+def test_generate_definition_is_playable():
+    """Generated ScenarioDefinition should work in the RL environment."""
+    from src.environment.env import SREEnvironment
+    gen = ScenarioGenerator()
+    scenario = gen.generate_definition(_make_incident())
+    env = SREEnvironment(scenario=scenario, seed=42)
+    obs, info = env.reset()
+    assert len(obs["text_observation"]) > 0
+    env.close()
+
+
+def test_batch_generate_filters_by_quality():
+    gen = ScenarioGenerator()
+    incidents = [
+        _make_incident(id="good", quality_score=0.8),
+        _make_incident(id="bad", quality_score=0.1),
+    ]
+    results = gen.batch_generate(incidents, min_quality=0.5)
+    assert len(results) == 1
+
+
+def test_batch_generate_filters_by_taxonomy():
+    gen = ScenarioGenerator()
+    incidents = [
+        _make_incident(id="labeled", taxonomy_labels=["infrastructure.database.connection_pool"]),
+        _make_incident(id="unlabeled", taxonomy_labels=[]),
+    ]
+    results = gen.batch_generate(incidents)
+    assert len(results) == 1

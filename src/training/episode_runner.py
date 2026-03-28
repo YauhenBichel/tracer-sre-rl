@@ -77,16 +77,20 @@ class EpisodeRunner:
                  max_difficulty: float | None = None,
                  scenarios: list[ScenarioDefinition] | None = None,
                  incident_db_path: str | None = None):
+        loader = ScenarioLoader(scenarios_dir) if scenarios_dir else ScenarioLoader()
         if scenarios is not None:
-            self._scenarios = scenarios
+            self._scenarios = scenarios + loader.load_all()
         elif incident_db_path is not None:
-            from src.generators.incident_replay import IncidentReplaySource
-            source = IncidentReplaySource()
-            source.load_from_db(incident_db_path)
-            source.load_builtin_scenarios(scenarios_dir)
-            self._scenarios = source.get_all()
+            from src.crawler.repository.sqlite_repository import SqliteIncidentRepository
+            from src.crawler.scenario_generator import ScenarioGenerator
+            repo = SqliteIncidentRepository(incident_db_path)
+            try:
+                incidents = repo.load_all()
+            finally:
+                repo.close()
+            generated = ScenarioGenerator().batch_generate(incidents)
+            self._scenarios = generated + loader.load_all()
         else:
-            loader = ScenarioLoader(scenarios_dir) if scenarios_dir else ScenarioLoader()
             self._scenarios = loader.load_all(max_difficulty=max_difficulty)
 
         if max_difficulty is not None:

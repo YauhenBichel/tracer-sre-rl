@@ -83,7 +83,7 @@ This MVP targets the reward signal and the surrounding infrastructure needed to 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run tests (152 tests)
+# Run tests (155 tests)
 python -m pytest tests/ -v
 
 # Run demo (3 baseline agents on all 5 scenarios)
@@ -92,14 +92,17 @@ python demo.py
 # Run a specific scenario with a specific agent
 python demo.py --scenario scenarios/db_connection_pool.yaml --agent oracle
 
-# Run the incident data crawler
-python run_crawler.py
-
-# Generate scenarios from crawled incidents
-python run_crawler.py --generate-scenarios
-
-# Run the RL training loop (100 episodes with random agent baseline)
+# Train on builtin scenarios (5 YAMLs, no downloads needed)
 python run_training.py --episodes 100
+
+# Train on real Aiops-Dataset faults (241 incidents, CSV included in repo)
+python run_training.py --episodes 100 --aiops-groundtruth data/groundtruth-all.csv
+
+# Crawl public APIs for more incidents (needs internet, 30 seconds)
+python run_crawler.py --db-path data/incidents.db
+
+# Train on crawled incidents + builtins
+python run_training.py --episodes 100 --incident-db data/incidents.db
 ```
 
 ### open-sre-agent Integration
@@ -318,7 +321,7 @@ tracer-sre-rl/
 │   ├── reward.yaml                # Reward weights & thresholds
 │   ├── crawlers.yaml              # Crawler endpoints & patterns
 │   └── environment.yaml           # Distractor diagnoses & remediations
-├── tests/                         # Test suite (152 tests)
+├── tests/                         # Test suite (155 tests)
 ├── demo.py                        # Demo runner with heuristic agents
 ├── run_crawler.py                 # Crawler + scenario generator CLI
 ├── Dockerfile

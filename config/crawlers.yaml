@@ -43,13 +43,3 @@ github_postmortems:
     "infrastructure.network.tls_certificate": "(?i)certific|TLS|SSL"               # certificate problems
     "application.memory.leak": "(?i)memory|leak|OOM"                               # memory leaks / OOM
     "application.dependency.cascading_failure": "(?i)cascad|cascade|retry|circuit"  # cascading failures
-
-# VOID (Verica Open Incident Database) crawler configuration.
-# ~10,000 incidents from ~590 organisations. See: https://www.thevoid.community/
-void:
-  url: "https://www.thevoid.community/api/incidents"    # public API endpoint
-  quality_fields:
-    - "title"
-    - "company"
-    - "categories"
-    - "url"

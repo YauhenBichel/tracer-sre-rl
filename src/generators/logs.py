@@ -131,6 +131,21 @@ class LogGenerator:
     def _render(self, template: str, service: ServiceDefinition,
                 active_events: list[TimelineEntry] | None = None) -> str:
         """Render a log template with values correlated to active events."""
+        generators = self._build_value_generators(service, active_events)
+        try:
+            values = {k: v() for k, v in generators.items() if f"{{{k}}}" in template}
+            return template.format_map(values)
+        except (KeyError, IndexError):
+            return template
+
+    def _build_value_generators(self, service: ServiceDefinition,
+                                active_events: list[TimelineEntry] | None) -> dict:
+        """Build placeholder value generators correlated to active events.
+
+        During error events, values reflect incident state (high latency,
+        5xx status codes, connections near max). During normal operation,
+        values reflect healthy baselines.
+        """
         rng = self._rng
         has_errors = active_events and any(
             e.event_type in ERROR_EVENT_TYPES and (e.service == service.name or e.event_type == EVENT_CASCADE)
@@ -139,37 +154,39 @@ class LogGenerator:
         max_conn = service.config.get("max_connections", 100)
         upstream = rng.choice(list(service.dependencies)) if service.dependencies else "unknown"
 
-        generators = {
+        return {
+            # HTTP request fields
             "method": lambda: rng.choice(["GET", "POST", "PUT", "DELETE"]),
             "path": lambda: rng.choice(["/api/users", "/api/orders", "/api/health"]),
             "status": lambda: rng.choice([500, 503, 502, 200]) if has_errors else rng.choice([200, 200, 200, 201]),
             "duration": lambda: rng.randint(1000, 15000) if has_errors else rng.randint(1, 200),
             "upstream": lambda: upstream,
-            # active connections: high during incidents, normal otherwise
+            # Connection fields — high during incidents
             "active": lambda: rng.randint(int(max_conn * 0.85), max_conn) if has_errors else rng.randint(10, int(max_conn * 0.5)),
             "idle": lambda: rng.randint(0, 5) if has_errors else rng.randint(5, 20),
             "max": lambda: max_conn,
+            # Error fields
             "error": lambda: rng.choice(["connection refused", "connection timeout", "connection reset by peer"]),
             "failure_count": lambda: rng.randint(5, 50),
             "window": lambda: rng.choice([30, 60, 120]),
+            # Application fields
             "operation": lambda: rng.choice(["getUserById", "createOrder", "updateInventory"]),
             "user_id": lambda: f"usr_{rng.randint(1000, 9999)}",
             "query_type": lambda: rng.choice(["SELECT", "INSERT", "UPDATE"]),
             "client_ip": lambda: f"10.0.{rng.randint(1, 255)}.{rng.randint(1, 255)}",
+            # Database fields
             "lag_ms": lambda: rng.randint(50, 500) if has_errors else rng.randint(0, 10),
             "tx1": lambda: f"tx_{rng.randint(100, 999)}",
             "tx2": lambda: f"tx_{rng.randint(100, 999)}",
             "free_mb": lambda: rng.randint(5, 50) if has_errors else rng.randint(200, 500),
+            # Queue fields
             "topic": lambda: rng.choice(["orders", "events", "notifications"]),
             "partition": lambda: rng.randint(0, 11),
             "group": lambda: rng.choice(["order-processor", "analytics", "notifier"]),
             "lag": lambda: rng.randint(1000, 10000) if has_errors else rng.randint(0, 100),
+            # Resource fields
             "used_mb": lambda: rng.randint(3000, 4000) if has_errors else rng.randint(500, 2000),
             "max_mb": lambda: 4096,
             "rate": lambda: rng.randint(500, 2000) if has_errors else rng.randint(0, 50),
             "percent": lambda: rng.randint(85, 99) if has_errors else rng.randint(30, 60),
         }
-        try:
-            return template.format_map({k: v() for k, v in generators.items() if f"{{{k}}}" in template})
-        except (KeyError, IndexError):
-            return template

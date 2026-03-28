@@ -1,11 +1,18 @@
-"""Aiops-Dataset loader — imports labeled fault scenarios from bbyldebb/Aiops-Dataset.
+"""Aiops-Dataset groundtruth loader.
 
-The dataset contains log/metric/trace data from a 46-instance e-commerce
-microservice system with ground-truth fault labels. This loader reads
-the groundtruth CSV files and normalises them into NormalisedIncident format,
-which can then be fed into the ScenarioGenerator.
+Reads groundtruth-all.csv from the Aiops-Dataset and converts labeled
+fault scenarios into NormalisedIncident objects for scenario generation.
 
-Dataset: https://github.com/bbyldebb/Aiops-Dataset
+CSV format (actual columns from the dataset):
+  timestamp,level,cmdb_id,failure_type
+
+  - timestamp: Unix epoch seconds
+  - level: "node", "pod", or "service"
+  - cmdb_id: instance name (e.g., "node-6", "recommendationservice-0")
+  - failure_type: human-readable fault description
+
+Download from: https://mega.nz/file/SA1VCRoJ#wLSzQdE1p0M4-l5mGbRhUqqEU7t34XJGzbJLXWowEiM
+Extract groundtruth/groundtruth-all.csv into data/
 """
 
 from __future__ import annotations
@@ -21,18 +28,34 @@ logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "aiops_dataset"
 
+# Maps Aiops-Dataset failure_type strings to taxonomy labels.
+_FAULT_TYPE_MAPPING = {
+    "CPU Load": "infrastructure.compute.cpu_saturation",
+    "CPU Failure": "infrastructure.compute.cpu_saturation",
+    "CPU Spiking": "infrastructure.compute.cpu_saturation",
+    "Memory Load": "application.memory.leak",
+    "Memory Consumption": "application.memory.leak",
+    "Network Latency": "infrastructure.network.partition",
+    "Network Packet Loss": "infrastructure.network.partition",
+    "Packet Corruption": "infrastructure.network.partition",
+    "Packet Duplication": "infrastructure.network.partition",
+    "Process Termination": "infrastructure.compute.container_crash",
+    "Read I/O Load": "infrastructure.storage.iops_throttling",
+    "Write I/O Load": "infrastructure.storage.iops_throttling",
+    "Disk Read": "infrastructure.storage.iops_throttling",
+    "Disk Write": "infrastructure.storage.iops_throttling",
+    "Disk Space": "infrastructure.storage.disk_full",
+}
+
 
 def load_aiops_groundtruth(groundtruth_path: str) -> list[NormalisedIncident]:
     """Load fault incidents from the Aiops-Dataset groundtruth CSV.
 
-    Expected CSV columns: timestamp, duration, root_cause_instance,
-    root_cause_type, failure_type (exact columns may vary).
-
     Args:
-        groundtruth_path: Path to groundtruth-all.csv or individual date CSV.
+        groundtruth_path: Path to groundtruth-all.csv.
 
     Returns:
-        List of normalised incidents ready for scenario generation.
+        List of NormalisedIncident objects ready for ScenarioGenerator.batch_generate().
     """
     path = Path(groundtruth_path)
     if not path.exists():
@@ -53,44 +76,30 @@ def load_aiops_groundtruth(groundtruth_path: str) -> list[NormalisedIncident]:
 
 
 def _normalise_row(row: dict) -> NormalisedIncident:
-    """Convert a groundtruth CSV row to NormalisedIncident."""
-    timestamp = row.get("timestamp", row.get("start_time", ""))
-    root_cause = row.get("root_cause_instance", row.get("root_cause", ""))
-    fault_type = row.get("failure_type", row.get("root_cause_type", "unknown"))
-    duration = row.get("duration", row.get("duration_min", ""))
-
-    title = f"{fault_type} on {root_cause}"
-    taxonomy_labels = _classify_fault_type(fault_type)
+    """Convert a single groundtruth CSV row to NormalisedIncident."""
+    timestamp = row.get("timestamp", "")
+    level = row.get("level", "")
+    cmdb_id = row.get("cmdb_id", "")
+    failure_type = row.get("failure_type", "unknown")
 
     return NormalisedIncident(
-        id=f"{SOURCE_NAME}-{timestamp}-{root_cause}",
+        id=f"{SOURCE_NAME}-{timestamp}-{cmdb_id}",
         source=SOURCE_NAME,
         source_url="https://github.com/bbyldebb/Aiops-Dataset",
-        title=title,
-        summary=f"Fault type: {fault_type}, Root cause instance: {root_cause}, Duration: {duration}",
-        root_causes=[root_cause],
-        affected_services=[root_cause] if root_cause else [],
-        impact={"duration": duration, "fault_type": fault_type},
-        taxonomy_labels=taxonomy_labels,
+        title=f"{failure_type} on {cmdb_id}",
+        summary=f"Level: {level}, Instance: {cmdb_id}, Fault: {failure_type}",
+        root_causes=[cmdb_id],
+        affected_services=[cmdb_id] if cmdb_id else [],
+        impact={"level": level, "fault_type": failure_type},
+        taxonomy_labels=_classify_fault_type(failure_type),
         ingested_at=DateTimeUtils.now_iso(),
         quality_score=0.7,
     )
 
 
-def _classify_fault_type(fault_type: str) -> list[str]:
-    """Map Aiops-Dataset fault types to taxonomy labels."""
-    ft = fault_type.lower()
-    mapping = {
-        "cpu": "infrastructure.compute.cpu_saturation",
-        "memory": "application.memory.leak",
-        "disk": "infrastructure.storage.disk_full",
-        "network": "infrastructure.network.partition",
-        "pod": "infrastructure.compute.container_crash",
-        "node": "infrastructure.compute.instance_failure",
-        "latency": "application.dependency.upstream_timeout",
-        "error": "application.dependency.cascading_failure",
-    }
-    for keyword, label in mapping.items():
-        if keyword in ft:
+def _classify_fault_type(failure_type: str) -> list[str]:
+    """Map Aiops-Dataset failure_type string to taxonomy labels."""
+    for keyword, label in _FAULT_TYPE_MAPPING.items():
+        if keyword.lower() in failure_type.lower():
             return [label]
     return ["operational.deployment.bad_deploy"]

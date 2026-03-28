@@ -5,7 +5,7 @@ __pycache__/
 dist/
 build/
 *.db
-data/
+data/*.db
 .pytest_cache/
 training_data/
 scenarios/generated/

@@ -26,7 +26,7 @@ The RL environment exposes the same tool interface as opensre's production pipel
 
 | Component | What It Does | Key Metric |
 |-----------|-------------|------------|
-| **5 incident crawlers** | GCP, Cloudflare, GitHub, VOID, Aiops-Dataset → SQLite | ~10K incidents accessible |
+| **4 incident crawlers** | GCP, Cloudflare, GitHub post-mortems + Aiops-Dataset CSV → SQLite | ~10K incidents accessible |
 | **Scenario generator** | Converts real incidents → playable YAML scenarios | Covers 10/35 taxonomy leaves (29%) from builtins |
 | **Telemetry generator** | Event-correlated metrics + logs + traces | 38ms/episode, 2.5MB memory |
 | **RL environment** | Gymnasium API with 7 actions, tool-based observation space | 120K episodes/hour |
@@ -35,7 +35,7 @@ The RL environment exposes the same tool interface as opensre's production pipel
 | **opensre integration** | SimulatedAction matching InvestigationAction interface | 5/5 actions pass through real execute_actions |
 | **Training loop** | EpisodeRunner with trajectory collection + JSONL/DPO export | Curriculum support via difficulty filtering |
 | **3 baseline agents** | Random, heuristic (no gold labels), oracle | Validates reward discrimination |
-| **152 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
+| **155 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
 
 ### Baseline Agent Results (Measured)
 
@@ -51,39 +51,14 @@ Key observations:
 - **Fast + wrong = low reward.** The random agent takes few steps but gets wrong answers. After the `efficiency × diagnosis` fix, its efficiency score dropped from 1.0 to 0.244 — the reward correctly penalises speed without accuracy.
 - **Safety is easy to satisfy.** All agents score 1.0. The safety penalties catch truly degenerate behaviour (diagnose on step 1), not normal investigation patterns.
 
-### Compute Estimates (Measured)
+### Key Metrics (Measured)
 
-| Metric | Measured Value |
-|--------|---------------|
-| Telemetry generation | 38ms per episode |
-| Full episode with agent | 29ms per episode |
-| Memory per episode | 2.5MB (no accumulation) |
-| Single-core throughput | 120,000 episodes/hour |
-| Test suite | 152 tests in 3.2 seconds |
+- **Throughput**: 120,000 episodes/hour (single core, random agent). With LLM: ~1,800 eps/hr.
+- **Per episode**: 38ms generation, 2.5MB memory, deterministic per seed.
+- **opensre integration**: 5/5 `execute_actions` calls pass against real opensre codebase.
+- **Full training run (100K episodes)**: ~$650 cloud cost, ~3 weeks elapsed.
 
-**At scale (100K episodes):**
-
-| Layer | Episodes | Time | Cost |
-|-------|----------|------|------|
-| L1 (synthetic + LLM agent) | 95K | ~48 hours (1× A100) | ~$150 |
-| L2 (AIOpsLab validation) | 5K | ~500 hours | ~$500 |
-| **Total** | **100K** | **~3 weeks** | **~$650** |
-
-### opensre Integration (Verified)
-
-The RL environment plugs into opensre's LangGraph pipeline as a simulated evidence source. Tested against opensre's actual `execute_actions()` function:
-
-```
-opensre execute_actions results:
-  get_alerts:            OK
-  get_service_topology:  OK
-  get_metrics:           OK
-  get_error_logs:        OK
-  get_traces:            OK
-Succeeded: 5/5
-```
-
-The integration provides `SimulatedAction` objects matching the exact `InvestigationAction` interface (with `parameter_extractor`, `availability_check`, and `function`) and `scenario_to_agent_state()` creating a full opensre `AgentState` with all required fields (`investigation_started_at`, `alert_json`, `resolved_integrations` with `endpoint`/`api_key` structure).
+See Part 3 for detailed compute estimates and reasoning.
 
 ## What I Didn't Build
 
@@ -149,3 +124,11 @@ These were only discovered by reading opensre's actual source code (`execute_act
 **Proof that LLM agents don't need RL.** If few-shot prompting with retrieval over a large enough incident knowledge base (e.g., 10K VOID incidents as context) achieves comparable investigation quality to RL-trained agents, the entire training environment becomes unnecessary. The investment should shift to building the retrieval system and the knowledge base.
 
 **Breakthrough in long-horizon credit assignment.** The current design uses end-of-episode sparse reward because intermediate rewards for SRE investigation are hard to define correctly. If credit assignment over 50+ step trajectories became reliable (e.g., through world models or hindsight experience replay), we could train on richer, longer investigation episodes with dense rewards at each step.
+
+### Questions I'd Ask Tracer
+
+1. **How does opensre currently measure investigation quality?** The `validity_score` (ratio of validated to non-validated claims) is a proxy — is it reliable enough for RL, or too noisy?
+2. **Do you have labeled incident data from customer investigations?** Even 100 real opensre sessions with human ratings would be more valuable for reward calibration than 10K synthetic episodes.
+3. **Which opensre node should RL improve first — `plan_actions` or `root_cause_diagnosis`?** They require different training data formats.
+4. **What LLM does opensre use in production?** Open-weight (Llama) enables GRPO fine-tuning; API-only (Claude/GPT-4) limits training to prompt optimisation.
+5. **Is the `investigation_loop_count` cap of 5 a hard product constraint?** The RL agent might benefit from 10 loops on complex incidents.

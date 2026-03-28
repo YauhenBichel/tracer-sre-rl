@@ -8,6 +8,9 @@ Usage:
     # Train on real incident data from crawled database
     python run_training.py --episodes 1000 --incident-db data/incidents.db
 
+    # Train on Aiops-Dataset groundtruth (download CSV first — see README)
+    python run_training.py --episodes 1000 --aiops-groundtruth data/groundtruth-all.csv
+
     # Curriculum: start with easy scenarios only
     python run_training.py --episodes 500 --max-difficulty 0.4
 
@@ -36,15 +39,27 @@ def main() -> None:
                         help="Maximum scenario difficulty for curriculum learning")
     parser.add_argument("--incident-db", default=None,
                         help="Path to SQLite database of crawled incidents (adds real-data scenarios)")
+    parser.add_argument("--aiops-groundtruth", default=None,
+                        help="Path to Aiops-Dataset groundtruth-all.csv (adds labeled fault scenarios)")
     parser.add_argument("--export", default=None,
                         help="Export trajectories as JSONL for LLM fine-tuning")
     parser.add_argument("--export-pairs", default=None,
                         help="Export preference pairs for DPO training")
     args = parser.parse_args()
 
+    # Load additional scenarios from Aiops-Dataset if provided
+    extra_scenarios = None
+    if args.aiops_groundtruth:
+        from src.crawler.crawlers.aiops_dataset_loader import load_aiops_groundtruth
+        from src.crawler.scenario_generator import ScenarioGenerator
+        incidents = load_aiops_groundtruth(args.aiops_groundtruth)
+        extra_scenarios = ScenarioGenerator().batch_generate(incidents, min_quality=0.0)
+        print(f"Loaded {len(extra_scenarios)} scenarios from Aiops-Dataset groundtruth")
+
     runner = EpisodeRunner(
         max_difficulty=args.max_difficulty,
         incident_db_path=args.incident_db,
+        scenarios=extra_scenarios,
     )
     print(f"Training on {len(runner.scenarios)} scenarios, {args.episodes} episodes...")
 
