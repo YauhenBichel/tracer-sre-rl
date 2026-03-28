@@ -1,0 +1,19 @@
+# Distractor diagnosis labels — wrong answers added to the diagnosis option list
+# so the agent must distinguish real root causes from plausible but incorrect ones.
+distractor_diagnoses:
+  - "infrastructure.network.partition"            # network split-brain (rare, specific)
+  - "infrastructure.compute.cpu_saturation"       # CPU overload
+  - "application.concurrency.deadlock"            # application-level deadlock
+  - "operational.deployment.bad_deploy"            # bad code pushed to production
+  - "external.cloud_provider"                      # cloud provider outage
+  - "application.data.hotspot"                     # data partition skew
+  - "infrastructure.network.tls_certificate"       # expired or misconfigured certificate
+  - "operational.capacity.queue_backlog"           # message queue consumer lag
+
+# Distractor remediation actions — generic fixes that an untrained agent might pick.
+# Each has a low effectiveness score in the reward function.
+distractor_remediations:
+  - "Restart all services"                         # brute-force restart (almost never correct)
+  - "Scale up all services to 3x replicas"         # horizontal scaling (band-aid)
+  - "Rollback to previous deployment"              # rollback (only correct for bad deploys)
+  - "No action needed — self-healing"              # do nothing (rarely appropriate)

@@ -1,0 +1,127 @@
+# Scenario: Database Connection Pool Exhaustion Under Load
+# Taxonomy: infrastructure.database.connection_pool + operational.capacity.traffic_spike
+#
+# A traffic spike causes the application services to open more database connections
+# than the pool allows. The database starts rejecting connections, causing cascading
+# errors through the API gateway.
+
+id: "scenario-db-conn-pool-001"
+name: "Database Connection Pool Exhaustion Under Load"
+description: >
+  A 3x traffic spike causes application services to exhaust the database connection pool.
+  The database reaches its max_connections limit, causing connection errors that cascade
+  through the API layer as elevated latency and 5xx errors.
+taxonomy_labels:
+  - "infrastructure.database.connection_pool"
+  - "operational.capacity.traffic_spike"
+difficulty: 0.4
+
+services:
+  - name: api-gateway
+    service_type: web-server
+    dependencies: [user-service, order-service]
+  - name: user-service
+    service_type: application
+    dependencies: [postgres-primary]
+  - name: order-service
+    service_type: application
+    dependencies: [postgres-primary, redis-cache]
+  - name: postgres-primary
+    service_type: database
+    config:
+      max_connections: 100
+  - name: redis-cache
+    service_type: cache
+
+timeline:
+  - time_offset_seconds: 0
+    event_type: normal_traffic
+    description: "System operating normally under baseline load"
+
+  - time_offset_seconds: 300
+    event_type: traffic_ramp
+    service: api-gateway
+    params:
+      multiplier: 3.0
+      duration_seconds: 600
+    description: "Traffic begins ramping to 3x normal levels"
+
+  - time_offset_seconds: 420
+    event_type: connection_exhaustion
+    service: postgres-primary
+    params:
+      duration_seconds: 480
+    description: "Database active connections approaching max_connections limit"
+
+  - time_offset_seconds: 480
+    event_type: symptom
+    service: postgres-primary
+    params:
+      metric: active_connections
+      target_value: 98
+    description: "Active connections at 98/100"
+
+  - time_offset_seconds: 500
+    event_type: error_spike
+    service: user-service
+    params:
+      target_rate: 0.35
+      duration_seconds: 400
+    description: "User service starts failing on database connection errors"
+
+  - time_offset_seconds: 500
+    event_type: error_spike
+    service: order-service
+    params:
+      target_rate: 0.25
+      duration_seconds: 400
+    description: "Order service starts failing on database connection errors"
+
+  - time_offset_seconds: 520
+    event_type: cascade
+    service: api-gateway
+    params:
+      duration_seconds: 380
+    description: "API gateway experiences elevated latency and error rates"
+
+  - time_offset_seconds: 540
+    event_type: alert
+    service: api-gateway
+    description: "ALERT: High API error rate (>10%) on api-gateway"
+    params:
+      alert_name: "High API Error Rate"
+      severity: critical
+
+  - time_offset_seconds: 560
+    event_type: alert
+    service: postgres-primary
+    description: "ALERT: Database connections near limit (98/100)"
+    params:
+      alert_name: "Database Connection Pool Near Limit"
+      severity: warning
+
+gold_standard:
+  root_causes:
+    - taxonomy_label: "infrastructure.database.connection_pool"
+      relevance: 1.0
+      evidence:
+        - "postgres-primary active_connections near max_connections (100)"
+        - "user-service and order-service logging connection pool exhausted errors"
+        - "Correlation: connection exhaustion began after traffic ramp"
+    - taxonomy_label: "operational.capacity.traffic_spike"
+      relevance: 0.7
+      evidence:
+        - "3x traffic increase on api-gateway starting at t=300s"
+        - "Request rate tripled across all services"
+  remediations:
+    - action: "Increase postgres max_connections from 100 to 300"
+      effectiveness: 0.8
+    - action: "Deploy PgBouncer connection pooler in front of postgres"
+      effectiveness: 1.0
+    - action: "Rate limit api-gateway to cap incoming traffic"
+      effectiveness: 0.5
+    - action: "Scale user-service and order-service horizontally with connection pooling"
+      effectiveness: 0.7
+
+max_investigation_steps: 20
+episode_duration_seconds: 900

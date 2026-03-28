@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.db
+data/
+.pytest_cache/
+training_data/
+scenarios/generated/
+.venv/

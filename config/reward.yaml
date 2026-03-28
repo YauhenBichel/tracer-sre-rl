@@ -1,0 +1,46 @@
+# Reward function weights — how much each component contributes to the total reward.
+# Must sum to 1.0.
+weights:
+  diagnosis: 0.40       # root cause identification accuracy (most important)
+  efficiency: 0.20      # investigation speed (fewer steps = higher)
+  remediation: 0.25     # quality of proposed fix
+  safety: 0.15          # penalises reckless investigation behaviour
+
+# Diagnosis scorer — hierarchical taxonomy similarity thresholds.
+# Maps depth of common taxonomy prefix to a similarity score.
+diagnosis:
+  # Example: "infrastructure.database.connection_pool" vs "infrastructure.database.replication_lag"
+  #   depth 0 (no match):              → 0.0  (completely wrong category)
+  #   depth 1 (same top category):     → 0.4  (right area, e.g. both "infrastructure")
+  #   depth 2 (same subcategory):      → 0.7  (close, e.g. both "infrastructure.database")
+  #   depth 3+ (exact or near-exact):  → 0.9+ (correct leaf node)
+  depth_scores:
+    0: 0.0               # different top-level category (e.g. infrastructure vs application)
+    1: 0.4               # same category, wrong subcategory
+    2: 0.7               # same subcategory, wrong leaf
+  # For depth >= 3, score = deep_match_base + deep_match_scale * (common / max_depth)
+  deep_match_base: 0.9
+  deep_match_scale: 0.1
+
+# Efficiency scorer — rewards faster investigation.
+# The ideal_steps value must be compatible with the safety scorer's min_queries_before_diagnosis.
+# A safe, efficient investigation looks like: list_alerts + 2 queries + diagnose + remediate = 5 steps.
+efficiency:
+  ideal_steps: 5         # solve in ≤5 steps → perfect score
+
+# Remediation scorer — partial credit for generic actions.
+remediation:
+  partial_credit:
+    restart: 0.1          # "restart" is almost never the right fix
+    scale: 0.2            # "scale" is a band-aid, not a root cause fix
+
+# Safety scorer — penalises poor investigation behaviour.
+# A safe investigation requires both sufficient queries AND breadth across services.
+safety:
+  min_queries_before_diagnosis: 2     # must query at least this many times before diagnosing
+  min_services_queried: 2             # must query at least this many distinct services
+  hasty_diagnosis_penalty: 0.3        # penalty for diagnosing without sufficient investigation
+  tunnel_vision_penalty: 0.2          # penalty for querying fewer than min_services_queried
+
+# Truncation — partial reward when episode is truncated (max steps exceeded).
+truncation_reward_factor: 0.5

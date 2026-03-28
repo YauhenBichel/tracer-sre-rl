@@ -1,0 +1,103 @@
+# Metric baseline ranges [low, high] per service type.
+# Used by MetricsGenerator to produce realistic values with noise around the midpoint.
+metric_baselines:
+  web-server:
+    request_rate: [100, 500]           # requests per second handled by the gateway
+    latency_p50_ms: [10, 50]           # median response time in milliseconds
+    latency_p99_ms: [50, 200]          # 99th percentile response time
+    error_rate: [0.001, 0.01]          # fraction of requests returning 5xx (0.1%-1%)
+    cpu_percent: [20, 40]              # CPU utilisation under normal load
+    memory_percent: [30, 50]           # heap/RSS as percentage of container limit
+    active_connections: [50, 200]      # concurrent open connections from clients
+  application:
+    request_rate: [50, 300]            # requests per second from upstream services
+    latency_p50_ms: [5, 30]            # median processing time
+    latency_p99_ms: [30, 150]          # tail latency including DB calls
+    error_rate: [0.001, 0.005]         # baseline error fraction
+    cpu_percent: [15, 35]              # CPU utilisation
+    memory_percent: [25, 45]           # memory utilisation
+    thread_pool_active: [10, 50]       # threads currently handling requests
+  database:
+    query_rate: [200, 1000]            # SQL queries per second
+    query_latency_p50_ms: [1, 10]      # median query execution time
+    query_latency_p99_ms: [10, 50]     # tail query latency
+    active_connections: [20, 80]       # open client connections to the database
+    replication_lag_ms: [0, 5]         # delay between primary and replica
+    cpu_percent: [10, 30]              # database host CPU
+    memory_percent: [40, 60]           # shared buffers + working memory
+    disk_usage_percent: [30, 50]       # data directory disk utilisation
+    iops: [500, 2000]                  # disk I/O operations per second
+  cache:
+    hit_rate: [0.90, 0.99]             # fraction of lookups served from cache
+    request_rate: [500, 2000]          # cache operations per second
+    latency_p50_ms: [0.5, 2]           # median cache response time
+    latency_p99_ms: [2, 10]            # tail cache latency
+    memory_percent: [40, 70]           # cache memory utilisation
+    eviction_rate: [0, 10]             # keys evicted per second due to memory pressure
+    connected_clients: [10, 50]        # number of connected application instances
+  queue:
+    enqueue_rate: [100, 500]           # messages published per second
+    dequeue_rate: [100, 500]           # messages consumed per second
+    queue_depth: [0, 100]              # number of messages waiting to be consumed
+    consumer_lag: [0, 10]              # messages behind the latest offset
+    cpu_percent: [5, 15]               # broker CPU utilisation
+    memory_percent: [20, 40]           # broker memory utilisation
+
+# Base request latency per service type in milliseconds.
+# Used by TraceGenerator to set span durations before applying event effects.
+base_latency_ms:
+  web-server: 20                       # includes routing and proxy overhead
+  application: 10                      # business logic processing time
+  database: 5                          # single query round-trip
+  cache: 1                             # in-memory lookup
+  queue: 3                             # publish acknowledgement
+
+# Log message templates per service type and severity level.
+# Placeholders like {duration}, {upstream} are filled with random contextual values.
+log_templates:
+  web-server:
+    INFO:
+      - "Request handled: {method} {path} - {status} in {duration}ms"  # successful request log
+    WARN:
+      - "Slow upstream response from {upstream}: {duration}ms"         # upstream latency warning
+      - "Connection pool nearing capacity: {active}/{max} active"      # pool pressure warning
+    ERROR:
+      - "Upstream connection failed: {upstream} - {error}"             # upstream unreachable
+      - "Circuit breaker OPEN for {upstream}: {failure_count} failures in {window}s"  # circuit breaker tripped
+  application:
+    INFO:
+      - "Processing request: {operation} for user={user_id}"           # request trace log
+      - "Database query completed in {duration}ms: {query_type}"       # successful DB call
+    WARN:
+      - "Slow database query: {duration}ms for {query_type}"           # slow query warning
+      - "Thread pool utilisation high: {active}/{max} threads"         # thread pool pressure
+    ERROR:
+      - "Database connection failed: {error}"                          # cannot reach database
+      - "Unhandled exception in {operation}: {error}"                  # application error
+      - "Connection pool exhausted, waiting for available connection"  # all connections in use
+  database:
+    INFO:
+      - "Checkpoint completed in {duration}ms"                         # periodic WAL checkpoint
+      - "Connection accepted from {client_ip}"                         # new client connected
+    WARN:
+      - "Long-running query detected: {duration}ms"                    # query exceeding threshold
+      - "Connection count approaching limit: {active}/{max}"           # nearing max_connections
+      - "Replication lag increasing: {lag_ms}ms"                       # replica falling behind
+    ERROR:
+      - "Too many connections: max={max}, active={active}"             # max_connections reached
+      - "Deadlock detected between transactions {tx1} and {tx2}"       # deadlock abort
+      - "Disk space critically low: {free_mb}MB remaining"             # disk near full
+  cache:
+    INFO:
+      - "Memory usage: {used_mb}MB / {max_mb}MB"                      # periodic memory report
+    WARN:
+      - "Eviction rate elevated: {rate}/s"                             # keys being evicted
+    ERROR:
+      - "Out of memory, rejecting writes"                              # cache full, writes refused
+  queue:
+    INFO:
+      - "Message published to {topic}: partition={partition}"          # successful publish
+    WARN:
+      - "Consumer lag increasing for group {group}: {lag} messages"    # consumers falling behind
+    ERROR:
+      - "Consumer group {group} rebalancing due to member timeout"     # consumer dropped out

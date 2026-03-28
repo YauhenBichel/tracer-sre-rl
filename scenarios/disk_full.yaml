@@ -1,0 +1,125 @@
+# Scenario: Disk Space Exhaustion from Log Accumulation
+# Taxonomy: infrastructure.storage.disk_full
+#
+# Verbose debug logging was accidentally left on after a troubleshooting session.
+# Log files grow until disk is full, causing the database to crash.
+
+id: "scenario-disk-full-001"
+name: "Disk Full from Accumulated Debug Logs"
+description: >
+  Debug logging was enabled on postgres-primary during a troubleshooting session
+  3 days ago and never turned off. Log files have been growing steadily and now
+  the disk is nearly full. When it fills completely, PostgreSQL can no longer
+  write WAL segments and crashes, taking down all dependent services.
+taxonomy_labels:
+  - "infrastructure.storage.disk_full"
+  - "operational.configuration.resource_limits"
+difficulty: 0.3
+
+services:
+  - name: api-gateway
+    service_type: web-server
+    dependencies: [app-service]
+  - name: app-service
+    service_type: application
+    dependencies: [postgres-primary]
+  - name: postgres-primary
+    service_type: database
+    config:
+      max_connections: 200
+      disk_total_gb: 100
+
+timeline:
+  - time_offset_seconds: 0
+    event_type: normal_traffic
+    description: "System operating normally, disk at 85%"
+
+  - time_offset_seconds: 0
+    event_type: disk_fill
+    service: postgres-primary
+    params:
+      target_percent: 85
+      duration_seconds: 1
+    description: "Disk already at 85% from accumulated logs"
+
+  - time_offset_seconds: 60
+    event_type: disk_fill
+    service: postgres-primary
+    params:
+      target_percent: 98
+      duration_seconds: 400
+    description: "Disk usage continuing to grow from debug logs"
+
+  - time_offset_seconds: 180
+    event_type: alert
+    service: postgres-primary
+    description: "ALERT: Disk usage above 90% on postgres-primary"
+    params:
+      alert_name: "High Disk Usage"
+      severity: warning
+
+  - time_offset_seconds: 420
+    event_type: latency_spike
+    service: postgres-primary
+    params:
+      factor: 10.0
+      duration_seconds: 480
+    description: "Database queries slowing as disk I/O saturates"
+
+  - time_offset_seconds: 480
+    event_type: error_spike
+    service: postgres-primary
+    params:
+      target_rate: 0.9
+      duration_seconds: 420
+    description: "PostgreSQL cannot write WAL - PANIC: could not write to file"
+
+  - time_offset_seconds: 500
+    event_type: cascade
+    service: app-service
+    params:
+      duration_seconds: 400
+    description: "Application service losing database connectivity"
+
+  - time_offset_seconds: 500
+    event_type: cascade
+    service: api-gateway
+    params:
+      duration_seconds: 400
+    description: "API gateway returning 503s"
+
+  - time_offset_seconds: 520
+    event_type: alert
+    service: postgres-primary
+    description: "ALERT: PostgreSQL process crashed - disk full"
+    params:
+      alert_name: "Database Process Crashed"
+      severity: critical
+
+gold_standard:
+  root_causes:
+    - taxonomy_label: "infrastructure.storage.disk_full"
+      relevance: 1.0
+      evidence:
+        - "postgres-primary disk_usage_percent at 98%+"
+        - "PostgreSQL WAL write failure in error logs"
+        - "Disk usage growing steadily over time"
+    - taxonomy_label: "operational.configuration.resource_limits"
+      relevance: 0.6
+      evidence:
+        - "Debug logging was left enabled (configuration oversight)"
+        - "No log rotation policy in place"
+  remediations:
+    - action: "Delete old debug log files to free disk space"
+      effectiveness: 0.9
+    - action: "Disable debug logging on postgres-primary"
+      effectiveness: 0.8
+    - action: "Restart PostgreSQL after freeing disk space"
+      effectiveness: 0.7
+    - action: "Add log rotation policy"
+      effectiveness: 0.5
+    - action: "Expand disk volume"
+      effectiveness: 0.6
+
+max_investigation_steps: 15
+episode_duration_seconds: 900

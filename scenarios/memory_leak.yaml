@@ -1,0 +1,130 @@
+# Scenario: Gradual Memory Leak Causing OOM
+# Taxonomy: application.memory.leak + infrastructure.compute.oom
+#
+# A memory leak in the order-service causes gradual memory growth over 10 minutes,
+# eventually triggering OOM kills and cascading errors.
+
+id: "scenario-memory-leak-001"
+name: "Gradual Memory Leak Leading to OOM Kills"
+description: >
+  A code deployment introduced a memory leak in the order-service. Memory usage
+  grows steadily over ~10 minutes until the container hits its memory limit and
+  is OOM-killed. The service restarts but quickly leaks again, causing
+  CrashLoopBackOff-like behaviour with cascading errors to dependent services.
+taxonomy_labels:
+  - "application.memory.leak"
+  - "infrastructure.compute.oom"
+difficulty: 0.5
+
+services:
+  - name: api-gateway
+    service_type: web-server
+    dependencies: [order-service, product-service]
+  - name: order-service
+    service_type: application
+    dependencies: [postgres-orders, redis-cache]
+    config:
+      memory_limit_mb: 2048
+  - name: product-service
+    service_type: application
+    dependencies: [postgres-products]
+  - name: postgres-orders
+    service_type: database
+    config:
+      max_connections: 200
+  - name: postgres-products
+    service_type: database
+    config:
+      max_connections: 200
+  - name: redis-cache
+    service_type: cache
+
+timeline:
+  - time_offset_seconds: 0
+    event_type: deployment
+    service: order-service
+    description: "Deployment v2.3.1 rolled out to order-service"
+    params:
+      version: "v2.3.1"
+      deployer: "ci-pipeline"
+
+  - time_offset_seconds: 60
+    event_type: memory_leak
+    service: order-service
+    params:
+      rate_per_minute: 5.0
+      duration_seconds: 600
+    description: "Memory usage begins rising due to leak in request handler"
+
+  - time_offset_seconds: 300
+    event_type: symptom
+    service: order-service
+    params:
+      metric: memory_percent
+      target_value: 75
+    description: "Order service memory at 75%"
+
+  - time_offset_seconds: 480
+    event_type: latency_spike
+    service: order-service
+    params:
+      factor: 5.0
+      duration_seconds: 120
+    description: "GC pressure causes latency spikes in order-service"
+
+  - time_offset_seconds: 540
+    event_type: alert
+    service: order-service
+    description: "ALERT: High memory usage on order-service (>90%)"
+    params:
+      alert_name: "High Memory Usage"
+      severity: warning
+
+  - time_offset_seconds: 600
+    event_type: error_spike
+    service: order-service
+    params:
+      target_rate: 0.8
+      duration_seconds: 300
+    description: "OOM kill - order-service restarting"
+
+  - time_offset_seconds: 600
+    event_type: cascade
+    service: api-gateway
+    params:
+      duration_seconds: 300
+    description: "API gateway getting errors from order-service"
+
+  - time_offset_seconds: 620
+    event_type: alert
+    service: order-service
+    description: "ALERT: order-service OOMKilled, container restarting"
+    params:
+      alert_name: "Container OOMKilled"
+      severity: critical
+
+gold_standard:
+  root_causes:
+    - taxonomy_label: "application.memory.leak"
+      relevance: 1.0
+      evidence:
+        - "order-service memory usage growing linearly since deployment v2.3.1"
+        - "Memory growth rate ~5% per minute"
+        - "Leak started immediately after deployment at t=60s"
+    - taxonomy_label: "infrastructure.compute.oom"
+      relevance: 0.6
+      evidence:
+        - "Container OOMKilled event at t=600s"
+        - "Memory hit container limit of 2048MB"
+  remediations:
+    - action: "Rollback order-service to v2.3.0"
+      effectiveness: 1.0
+    - action: "Increase memory limit to 4096MB (temporary)"
+      effectiveness: 0.3
+    - action: "Fix memory leak in request handler code"
+      effectiveness: 1.0
+    - action: "Restart order-service pods"
+      effectiveness: 0.1
+
+max_investigation_steps: 20
+episode_duration_seconds: 900

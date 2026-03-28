@@ -1,0 +1,147 @@
+# Scenario: Cascading Failure from Upstream Timeout
+# Taxonomy: application.dependency.cascading_failure + application.dependency.upstream_timeout
+#
+# A slow third-party payment service causes timeouts that cascade through the system.
+# Thread pools exhaust, circuit breakers trip, and the entire order flow degrades.
+
+id: "scenario-cascade-001"
+name: "Cascading Failure from Slow Payment Service"
+description: >
+  The external payment service starts responding slowly (p99 goes from 200ms to 15s).
+  The order-service, which calls it synchronously, exhausts its thread pool waiting
+  for responses. This cascades to the api-gateway as the order endpoint becomes
+  unresponsive. Meanwhile, the product-service and user-service remain healthy,
+  making it a partial outage that requires careful diagnosis.
+taxonomy_labels:
+  - "application.dependency.cascading_failure"
+  - "application.dependency.upstream_timeout"
+  - "application.concurrency.thread_pool_exhaustion"
+difficulty: 0.6
+
+services:
+  - name: api-gateway
+    service_type: web-server
+    dependencies: [order-service, product-service, user-service]
+  - name: order-service
+    service_type: application
+    dependencies: [payment-service, postgres-orders]
+    config:
+      thread_pool_size: 50
+      request_timeout_ms: 30000
+  - name: payment-service
+    service_type: application
+    dependencies: []
+    config:
+      type: external
+  - name: product-service
+    service_type: application
+    dependencies: [postgres-products]
+  - name: user-service
+    service_type: application
+    dependencies: [postgres-users]
+  - name: postgres-orders
+    service_type: database
+    config:
+      max_connections: 200
+  - name: postgres-products
+    service_type: database
+    config:
+      max_connections: 100
+  - name: postgres-users
+    service_type: database
+    config:
+      max_connections: 100
+
+timeline:
+  - time_offset_seconds: 0
+    event_type: normal_traffic
+    description: "System operating normally"
+
+  - time_offset_seconds: 180
+    event_type: latency_spike
+    service: payment-service
+    params:
+      factor: 50.0
+      duration_seconds: 720
+    description: "Payment service latency increases from 200ms to 10-15s"
+
+  - time_offset_seconds: 240
+    event_type: resource_exhaustion
+    service: order-service
+    params:
+      metric: thread_pool_active
+      ceiling: 49
+      duration_seconds: 660
+    description: "Order service thread pool filling up waiting for payment responses"
+
+  - time_offset_seconds: 300
+    event_type: latency_spike
+    service: order-service
+    params:
+      factor: 20.0
+      duration_seconds: 600
+    description: "Order service latency spikes as thread pool saturates"
+
+  - time_offset_seconds: 320
+    event_type: error_spike
+    service: order-service
+    params:
+      target_rate: 0.5
+      duration_seconds: 580
+    description: "Order service starts timing out and rejecting requests"
+
+  - time_offset_seconds: 340
+    event_type: cascade
+    service: api-gateway
+    params:
+      duration_seconds: 560
+    description: "API gateway order-related endpoints failing"
+
+  - time_offset_seconds: 360
+    event_type: alert
+    service: api-gateway
+    description: "ALERT: Elevated error rate on /api/orders endpoints"
+    params:
+      alert_name: "API Order Endpoint Errors"
+      severity: critical
+
+  - time_offset_seconds: 380
+    event_type: alert
+    service: order-service
+    description: "ALERT: Thread pool exhaustion on order-service"
+    params:
+      alert_name: "Thread Pool Exhaustion"
+      severity: critical
+
+gold_standard:
+  root_causes:
+    - taxonomy_label: "application.dependency.upstream_timeout"
+      relevance: 1.0
+      evidence:
+        - "payment-service p99 latency went from 200ms to 15s at t=180s"
+        - "order-service logs show timeout errors calling payment-service"
+        - "product-service and user-service remain healthy (not all traffic affected)"
+    - taxonomy_label: "application.concurrency.thread_pool_exhaustion"
+      relevance: 0.8
+      evidence:
+        - "order-service thread_pool_active at 49/50 (saturated)"
+        - "Threads blocked waiting for payment-service responses"
+    - taxonomy_label: "application.dependency.cascading_failure"
+      relevance: 0.7
+      evidence:
+        - "Failure chain: payment-service slow → order-service threads exhausted → api-gateway errors"
+        - "Only order-related endpoints affected; product and user flows healthy"
+  remediations:
+    - action: "Add circuit breaker for payment-service calls with 5s timeout"
+      effectiveness: 1.0
+    - action: "Reduce request_timeout_ms from 30s to 5s for payment-service"
+      effectiveness: 0.8
+    - action: "Switch payment-service calls to async/non-blocking"
+      effectiveness: 0.9
+    - action: "Restart order-service pods"
+      effectiveness: 0.1
+    - action: "Return cached/degraded responses when payment-service is slow"
+      effectiveness: 0.7
+
+max_investigation_steps: 25
+episode_duration_seconds: 900

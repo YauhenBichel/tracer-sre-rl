@@ -1,0 +1,55 @@
+# GCP incident crawler configuration.
+# Fetches from Google Cloud's public incident JSON feed.
+gcp:
+  url: "https://status.cloud.google.com/incidents.json"        # public JSON API, no auth required
+  base_incident_url: "https://status.cloud.google.com/incidents/"  # prefix for individual incident URLs
+  # Fields checked to compute a quality score (0-1) for each incident.
+  # Pipe syntax means OR: "updates|most-recent-update" counts if either field is present.
+  quality_fields:
+    - "external_desc"                   # human-readable incident description
+    - "updates|most-recent-update"      # timeline updates (GCP uses different field names across API versions)
+    - "service_name"                    # affected GCP service (e.g., "Google Compute Engine")
+    - "severity"                        # incident severity level
+    - "status_impact"                   # impact classification (e.g., "SERVICE_DISRUPTION")
+
+# Cloudflare incident crawler configuration.
+# Uses the Atlassian Statuspage API (same format used by GitHub, Datadog, etc.).
+cloudflare:
+  url: "https://yh6f0r4529hb.statuspage.io/api/v2/incidents.json"  # Cloudflare's Statuspage API
+  max_pages: 5                          # maximum number of pages to fetch (20 incidents per page)
+  quality_fields:
+    - "name"                            # incident title
+    - "incident_updates"                # timeline of status updates
+    - "components"                      # affected Cloudflare components (e.g., "API", "Dashboard")
+    - "resolved_at"                     # resolution timestamp (present = incident is closed)
+
+# GitHub post-mortem crawler configuration.
+# Parses the curated danluu/post-mortems README for links to real incident reports.
+github_postmortems:
+  url: "https://raw.githubusercontent.com/danluu/post-mortems/master/README.md"  # raw markdown
+  # URLs containing these substrings are skipped (repo links, not incident reports).
+  skip_urls:
+    - "github.com/danluu"              # links to the repo itself
+    - "wikipedia.org/wiki/List"        # Wikipedia list pages, not individual incidents
+  # Regex patterns for auto-classifying incidents by description text.
+  # Keys are taxonomy labels; values are case-insensitive regex patterns.
+  category_patterns:
+    "operational.configuration.resource_limits": "(?i)config|misconfigur"           # configuration errors
+    "infrastructure.compute.instance_failure": "(?i)hardware|power|UPS"             # hardware/power failures
+    "infrastructure.network.dns": "(?i)\\bDNS\\b"                                  # DNS-related incidents
+    "infrastructure.database.split_brain": "(?i)database|split.?brain|postgres|mysql"  # database failures
+    "operational.deployment.bad_deploy": "(?i)deploy|release|rollout"               # deployment-related
+    "operational.capacity.traffic_spike": "(?i)traffic|spike|capacity|scale"        # capacity/scaling issues
+    "infrastructure.network.tls_certificate": "(?i)certific|TLS|SSL"               # certificate problems
+    "application.memory.leak": "(?i)memory|leak|OOM"                               # memory leaks / OOM
+    "application.dependency.cascading_failure": "(?i)cascad|cascade|retry|circuit"  # cascading failures
+
+# VOID (Verica Open Incident Database) crawler configuration.
+# ~10,000 incidents from ~590 organisations. See: https://www.thevoid.community/
+void:
+  url: "https://www.thevoid.community/api/incidents"    # public API endpoint
+  quality_fields:
+    - "title"
+    - "company"
+    - "categories"
+    - "url"

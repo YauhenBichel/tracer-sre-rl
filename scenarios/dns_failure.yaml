@@ -1,0 +1,134 @@
+# Scenario: DNS Resolution Failure
+# Taxonomy: infrastructure.network.dns
+#
+# A DNS configuration change causes intermittent resolution failures for internal
+# service discovery. Some services can't reach their dependencies, but only
+# sporadically — making diagnosis harder.
+
+id: "scenario-dns-failure-001"
+name: "Intermittent DNS Resolution Failure After Config Change"
+description: >
+  A DNS configuration change (new nameserver rotation) introduces intermittent
+  resolution failures for internal service names. About 30% of DNS queries fail,
+  causing sporadic connection errors across multiple services. The failure is
+  non-deterministic — some requests succeed while others fail — making it harder
+  to diagnose than a complete outage.
+taxonomy_labels:
+  - "infrastructure.network.dns"
+  - "operational.configuration.security_group"
+difficulty: 0.7
+
+services:
+  - name: api-gateway
+    service_type: web-server
+    dependencies: [user-service, order-service, search-service]
+  - name: user-service
+    service_type: application
+    dependencies: [postgres-users]
+  - name: order-service
+    service_type: application
+    dependencies: [postgres-orders, redis-cache]
+  - name: search-service
+    service_type: application
+    dependencies: [elasticsearch]
+  - name: postgres-users
+    service_type: database
+    config:
+      max_connections: 100
+  - name: postgres-orders
+    service_type: database
+    config:
+      max_connections: 200
+  - name: redis-cache
+    service_type: cache
+  - name: elasticsearch
+    service_type: database
+    config:
+      max_connections: 50
+
+timeline:
+  - time_offset_seconds: 0
+    event_type: normal_traffic
+    description: "System operating normally"
+
+  - time_offset_seconds: 120
+    event_type: config_change
+    service: system
+    description: "DNS configuration updated: new nameserver added to rotation"
+    params:
+      change_type: "dns_nameserver_rotation"
+      deployer: "infra-team"
+
+  - time_offset_seconds: 180
+    event_type: error_spike
+    service: user-service
+    params:
+      target_rate: 0.15
+      duration_seconds: 720
+    description: "Intermittent DNS failures connecting to postgres-users"
+
+  - time_offset_seconds: 180
+    event_type: error_spike
+    service: order-service
+    params:
+      target_rate: 0.12
+      duration_seconds: 720
+    description: "Intermittent DNS failures connecting to dependencies"
+
+  - time_offset_seconds: 180
+    event_type: error_spike
+    service: search-service
+    params:
+      target_rate: 0.18
+      duration_seconds: 720
+    description: "Intermittent DNS failures connecting to elasticsearch"
+
+  - time_offset_seconds: 200
+    event_type: cascade
+    service: api-gateway
+    params:
+      duration_seconds: 700
+    description: "API gateway seeing intermittent errors from all backends"
+
+  - time_offset_seconds: 240
+    event_type: alert
+    service: api-gateway
+    description: "ALERT: Elevated 5xx error rate across all endpoints"
+    params:
+      alert_name: "Elevated 5xx Error Rate"
+      severity: critical
+
+  - time_offset_seconds: 300
+    event_type: alert
+    service: user-service
+    description: "ALERT: Intermittent connection errors to postgres-users"
+    params:
+      alert_name: "Database Connection Errors"
+      severity: warning
+
+gold_standard:
+  root_causes:
+    - taxonomy_label: "infrastructure.network.dns"
+      relevance: 1.0
+      evidence:
+        - "Multiple services experiencing intermittent connection errors simultaneously"
+        - "Errors started after DNS configuration change at t=120s"
+        - "Error pattern is non-deterministic (~30% failure rate, not 100%)"
+        - "All services affected, not service-specific — points to shared infrastructure"
+    - taxonomy_label: "operational.configuration.security_group"
+      relevance: 0.5
+      evidence:
+        - "DNS nameserver rotation change was the triggering event"
+        - "New nameserver may have incorrect firewall rules"
+  remediations:
+    - action: "Revert DNS configuration to previous nameserver rotation"
+      effectiveness: 1.0
+    - action: "Fix firewall rules for new nameserver"
+      effectiveness: 0.9
+    - action: "Increase DNS client retry count and timeout"
+      effectiveness: 0.4
+    - action: "Add DNS caching sidecar to all services"
+      effectiveness: 0.6
+
+max_investigation_steps: 25
+episode_duration_seconds: 900
