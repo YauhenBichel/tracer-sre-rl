@@ -14,13 +14,13 @@ import logging
 import random
 import sys
 
-from src.generators.loader import ScenarioLoader
-from src.environment.env import SREEnvironment
 from src.environment.actions import ActionType
+from src.environment.env import SREEnvironment
+from src.generators.loader import ScenarioLoader
 from src.generators.telemetry import METRIC_INTERVAL_SECONDS
 from src.models import AgentAction
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 MAX_LOG_QUERIES = 3
@@ -182,8 +182,8 @@ def oracle_agent_actions(env: SREEnvironment):
 
 AGENTS = {
     "random": lambda env, seed: random_agent_actions(env, random.Random(seed)),
-    "heuristic": lambda env, seed: heuristic_agent_actions(env),
-    "oracle": lambda env, seed: oracle_agent_actions(env),
+    "heuristic": lambda env, _seed: heuristic_agent_actions(env),
+    "oracle": lambda env, _seed: oracle_agent_actions(env),
 }
 
 

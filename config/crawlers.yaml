@@ -34,12 +34,31 @@ github_postmortems:
   # Regex patterns for auto-classifying incidents by description text.
   # Keys are taxonomy labels; values are case-insensitive regex patterns.
   category_patterns:
-    "operational.configuration.resource_limits": "(?i)config|misconfigur"           # configuration errors
-    "infrastructure.compute.instance_failure": "(?i)hardware|power|UPS"             # hardware/power failures
-    "infrastructure.network.dns": "(?i)\\bDNS\\b"                                  # DNS-related incidents
-    "infrastructure.database.split_brain": "(?i)database|split.?brain|postgres|mysql"  # database failures
-    "operational.deployment.bad_deploy": "(?i)deploy|release|rollout"               # deployment-related
-    "operational.capacity.traffic_spike": "(?i)traffic|spike|capacity|scale"        # capacity/scaling issues
-    "infrastructure.network.tls_certificate": "(?i)certific|TLS|SSL"               # certificate problems
-    "application.memory.leak": "(?i)memory|leak|OOM"                               # memory leaks / OOM
-    "application.dependency.cascading_failure": "(?i)cascad|cascade|retry|circuit"  # cascading failures
+    # Infrastructure
+    "infrastructure.compute.instance_failure": "(?i)hardware|power|UPS|server.*(down|fail|crash)"
+    "infrastructure.compute.cpu_saturation": "(?i)\\bCPU\\b|cpu.*(spike|saturat|100%)|high.?load"
+    "infrastructure.compute.oom": "(?i)\\bOOM\\b|out.?of.?memory|killed.?by.?kernel"
+    "infrastructure.compute.container_crash": "(?i)container|pod|CrashLoop|restart.?loop|k8s"
+    "infrastructure.network.dns": "(?i)\\bDNS\\b|name.?resolution|nslookup"
+    "infrastructure.network.partition": "(?i)network.*(partition|split|unreachable)|connectivity"
+    "infrastructure.network.tls_certificate": "(?i)certific|TLS|SSL|expir.*cert"
+    "infrastructure.network.load_balancer": "(?i)load.?balanc|\\bELB\\b|\\bALB\\b|nginx.*(down|fail)"
+    "infrastructure.database.split_brain": "(?i)split.?brain|database.*(fail|corrupt|outage)|postgres|mysql|mongo"
+    "infrastructure.database.connection_pool": "(?i)connection.?pool|max.?connections|too.?many.?connections"
+    "infrastructure.database.replication_lag": "(?i)replication|replica.*(lag|behind|fail)"
+    "infrastructure.storage.disk_full": "(?i)disk.*(full|space)|storage.*(full|exhaust)|\\binode\\b"
+    "infrastructure.storage.iops_throttling": "(?i)\\bIOPS\\b|disk.*(throttl|I/O)|EBS.*(burst|throttl)"
+    # Application
+    "application.memory.leak": "(?i)memory.?leak|leak|\\bOOM\\b|heap"
+    "application.dependency.cascading_failure": "(?i)cascad|cascade|retry.?storm|circuit.?breaker|thundering.?herd"
+    "application.dependency.upstream_timeout": "(?i)timeout|upstream.*(slow|fail)|dependency.*(fail|slow)"
+    "application.concurrency.deadlock": "(?i)deadlock|race.?condition|lock.?contention"
+    # Operational
+    "operational.deployment.bad_deploy": "(?i)deploy|release|rollout|rollback|canary"
+    "operational.deployment.feature_flag": "(?i)feature.?flag|toggle|experiment"
+    "operational.configuration.resource_limits": "(?i)config|misconfigur|limit|quota"
+    "operational.capacity.traffic_spike": "(?i)traffic|spike|capacity|scale|\\bDDoS\\b|viral"
+    "operational.capacity.queue_backlog": "(?i)queue|backlog|consumer.?lag|kafka|rabbit"
+    # External
+    "external.cloud_provider": "(?i)\\bAWS\\b|\\bGCP\\b|Azure|cloud.*(outage|incident)|\\bS3\\b|\\bEC2\\b"
+    "external.cdn": "(?i)\\bCDN\\b|Cloudflare|Akamai|Fastly|edge.*(fail|outage)"

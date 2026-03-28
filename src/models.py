@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 # --- Enums ---
 
@@ -140,3 +141,55 @@ class ScenarioDefinition:
     difficulty: float = 0.5
     max_investigation_steps: int = 20
     episode_duration_seconds: int = 900
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ScenarioDefinition:
+        """Build a ScenarioDefinition from a raw dictionary (YAML or generated).
+
+        Single source of truth for dict→ScenarioDefinition conversion (DRY).
+        """
+        gold = data.get("gold_standard", {})
+
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            description=data.get("description", ""),
+            taxonomy_labels=tuple(data.get("taxonomy_labels", [])),
+            services=tuple(
+                ServiceDefinition(
+                    name=s["name"],
+                    service_type=s["service_type"],
+                    dependencies=tuple(s.get("dependencies", [])),
+                    config=s.get("config", {}),
+                )
+                for s in data.get("services", [])
+            ),
+            timeline=tuple(
+                TimelineEntry(
+                    time_offset_seconds=t["time_offset_seconds"],
+                    event_type=t["event_type"],
+                    service=t.get("service"),
+                    params=t.get("params", {}),
+                    description=t.get("description", ""),
+                )
+                for t in data.get("timeline", [])
+            ),
+            gold_root_causes=tuple(
+                GoldStandardRootCause(
+                    taxonomy_label=rc["taxonomy_label"],
+                    relevance=rc.get("relevance", 1.0),
+                    evidence=tuple(rc.get("evidence", [])),
+                )
+                for rc in gold.get("root_causes", [])
+            ),
+            gold_remediations=tuple(
+                GoldStandardRemediation(
+                    action=r["action"],
+                    effectiveness=r.get("effectiveness", 1.0),
+                )
+                for r in gold.get("remediations", [])
+            ),
+            difficulty=data.get("difficulty", 0.5),
+            max_investigation_steps=data.get("max_investigation_steps", 20),
+            episode_duration_seconds=data.get("episode_duration_seconds", 900),
+        )

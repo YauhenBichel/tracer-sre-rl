@@ -16,11 +16,11 @@ import logging
 from pathlib import Path
 
 from src.crawler.incident_crawler import run_crawler
-from src.crawler.scenario_generator import ScenarioGenerator
 from src.crawler.repository.sqlite_repository import SqliteIncidentRepository
+from src.crawler.scenario_generator import ScenarioGenerator
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 

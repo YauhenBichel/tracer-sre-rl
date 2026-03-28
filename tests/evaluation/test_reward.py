@@ -20,6 +20,7 @@ def test_perfect_diagnosis(calculator, scenarios):
     scenario = next(s for s in scenarios if "connection" in s.name.lower())
     label = scenario.gold_root_causes[0].taxonomy_label
     score = calculator._diagnosis.score(label=label, scenario=scenario)
+
     assert score >= 0.9
 
 
@@ -89,5 +90,6 @@ def test_full_reward(calculator, scenarios):
             {"step": 5, "action": "DIAGNOSE", "target": "a"},
         ],
     )
+
     assert reward > 0.7
     assert calculator.last_breakdown.diagnosis_score >= 0.9

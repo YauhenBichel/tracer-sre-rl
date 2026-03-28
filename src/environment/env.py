@@ -115,6 +115,10 @@ class SREEnvironment(gym.Env):
     def step_count(self) -> int:
         return self._state.step_count
 
+    @property
+    def remediated(self) -> bool:
+        return self._state.remediated
+
     # --- Private ---
 
     def _start_episode(self, seed: int | None):

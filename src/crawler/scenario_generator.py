@@ -15,13 +15,7 @@ from typing import Any
 import yaml
 
 from src.crawler.models import NormalisedIncident
-from src.models import (
-    GoldStandardRemediation,
-    GoldStandardRootCause,
-    ScenarioDefinition,
-    ServiceDefinition,
-    TimelineEntry,
-)
+from src.models import ScenarioDefinition
 from src.taxonomy import build_default_taxonomy
 
 logger = logging.getLogger(__name__)
@@ -192,6 +186,143 @@ _EVENT_TEMPLATES = {
             "service": "api-gateway",
             "params": {"alert_name": "Cascading Failure Detected", "severity": "critical"},
             "description": "ALERT: Multiple services degraded",
+        },
+    ],
+    "infrastructure.compute.cpu_saturation": [
+        {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
+        {
+            "time_offset_seconds": 200,
+            "event_type": "resource_exhaustion",
+            "service": "app-service",
+            "params": {"metric": "cpu_percent", "ceiling": 95, "duration_seconds": 600},
+            "description": "CPU usage climbing",
+        },
+        {
+            "time_offset_seconds": 400,
+            "event_type": "latency_spike",
+            "service": "app-service",
+            "params": {"factor": 8.0, "duration_seconds": 500},
+            "description": "Latency increasing from CPU saturation",
+        },
+        {
+            "time_offset_seconds": 450,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "CPU Saturation", "severity": "critical"},
+            "description": "ALERT: CPU above 90%",
+        },
+    ],
+    "infrastructure.compute.container_crash": [
+        {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "error_spike",
+            "service": "app-service",
+            "params": {"target_rate": 0.8, "duration_seconds": 600},
+            "description": "Container crashing and restarting",
+        },
+        {
+            "time_offset_seconds": 320,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "Container CrashLoopBackOff", "severity": "critical"},
+            "description": "ALERT: Container restarting",
+        },
+    ],
+    "infrastructure.compute.instance_failure": [
+        {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "error_spike",
+            "service": "app-service",
+            "params": {"target_rate": 1.0, "duration_seconds": 600},
+            "description": "Node unreachable",
+        },
+        {
+            "time_offset_seconds": 310,
+            "event_type": "cascade",
+            "service": "api-gateway",
+            "params": {"duration_seconds": 590},
+            "description": "Services on failed node unavailable",
+        },
+        {
+            "time_offset_seconds": 330,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "Node Down", "severity": "critical"},
+            "description": "ALERT: Node not responding",
+        },
+    ],
+    "infrastructure.network.partition": [
+        {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "latency_spike",
+            "service": "app-service",
+            "params": {"factor": 20.0, "duration_seconds": 600},
+            "description": "Network partition causing timeouts",
+        },
+        {
+            "time_offset_seconds": 350,
+            "event_type": "error_spike",
+            "service": "app-service",
+            "params": {"target_rate": 0.5, "duration_seconds": 550},
+            "description": "Connection failures across partition",
+        },
+        {
+            "time_offset_seconds": 380,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "Network Connectivity Lost", "severity": "critical"},
+            "description": "ALERT: Services unreachable",
+        },
+    ],
+    "infrastructure.storage.iops_throttling": [
+        {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
+        {
+            "time_offset_seconds": 200,
+            "event_type": "latency_spike",
+            "service": "database-primary",
+            "params": {"factor": 15.0, "duration_seconds": 700},
+            "description": "Disk I/O throttled",
+        },
+        {
+            "time_offset_seconds": 400,
+            "event_type": "error_spike",
+            "service": "database-primary",
+            "params": {"target_rate": 0.2, "duration_seconds": 500},
+            "description": "Query timeouts from slow I/O",
+        },
+        {
+            "time_offset_seconds": 420,
+            "event_type": "alert",
+            "service": "database-primary",
+            "params": {"alert_name": "Disk I/O Throttling", "severity": "warning"},
+            "description": "ALERT: IOPS throttled",
+        },
+    ],
+    "application.dependency.upstream_timeout": [
+        {"time_offset_seconds": 0, "event_type": "normal_traffic", "description": "System operating normally"},
+        {
+            "time_offset_seconds": 300,
+            "event_type": "latency_spike",
+            "service": "app-service",
+            "params": {"factor": 30.0, "duration_seconds": 600},
+            "description": "Upstream dependency timing out",
+        },
+        {
+            "time_offset_seconds": 400,
+            "event_type": "error_spike",
+            "service": "app-service",
+            "params": {"target_rate": 0.4, "duration_seconds": 500},
+            "description": "Timeout errors propagating",
+        },
+        {
+            "time_offset_seconds": 430,
+            "event_type": "alert",
+            "service": "app-service",
+            "params": {"alert_name": "Upstream Timeout", "severity": "critical"},
+            "description": "ALERT: Upstream service unresponsive",
         },
     ],
 }
@@ -383,50 +514,7 @@ class ScenarioGenerator:
 
     def generate_definition(self, incident: NormalisedIncident) -> ScenarioDefinition:
         """Convert a single incident directly to an immutable ScenarioDefinition."""
-        data = self.generate(incident)
-        gold = data.get("gold_standard", {})
-        return ScenarioDefinition(
-            id=data["id"],
-            name=data["name"],
-            description=data.get("description", ""),
-            taxonomy_labels=tuple(data.get("taxonomy_labels", [])),
-            services=tuple(
-                ServiceDefinition(
-                    name=s["name"],
-                    service_type=s["service_type"],
-                    dependencies=tuple(s.get("dependencies", [])),
-                    config=s.get("config", {}),
-                )
-                for s in data.get("services", [])
-            ),
-            timeline=tuple(
-                TimelineEntry(
-                    time_offset_seconds=t["time_offset_seconds"],
-                    event_type=t["event_type"],
-                    service=t.get("service"),
-                    params=t.get("params", {}),
-                    description=t.get("description", ""),
-                )
-                for t in data.get("timeline", [])
-            ),
-            gold_root_causes=tuple(
-                GoldStandardRootCause(
-                    taxonomy_label=rc["taxonomy_label"],
-                    relevance=rc.get("relevance", DEFAULT_ROOT_CAUSE_RELEVANCE),
-                    evidence=tuple(rc.get("evidence", [])),
-                )
-                for rc in gold.get("root_causes", [])
-            ),
-            gold_remediations=tuple(
-                GoldStandardRemediation(
-                    action=r["action"], effectiveness=r.get("effectiveness", DEFAULT_REMEDIATION_EFFECTIVENESS)
-                )
-                for r in gold.get("remediations", [])
-            ),
-            difficulty=data.get("difficulty", DEFAULT_DIFFICULTY),
-            max_investigation_steps=data.get("max_investigation_steps", 20),
-            episode_duration_seconds=data.get("episode_duration_seconds", 900),
-        )
+        return ScenarioDefinition.from_dict(self.generate(incident))
 
     def batch_generate(self, incidents: list[NormalisedIncident], min_quality: float = 0.3) -> list[ScenarioDefinition]:
         """Convert a list of incidents to ScenarioDefinitions, filtering by quality."""

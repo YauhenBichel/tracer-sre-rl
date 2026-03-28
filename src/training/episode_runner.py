@@ -89,7 +89,9 @@ class EpisodeRunner:
         if scenarios is not None:
             self._scenarios = scenarios + loader.load_all()
         elif incident_db_path is not None:
-            from src.crawler.repository.sqlite_repository import SqliteIncidentRepository
+            from src.crawler.repository.sqlite_repository import (
+                SqliteIncidentRepository,
+            )
             from src.crawler.scenario_generator import ScenarioGenerator
 
             repo = SqliteIncidentRepository(incident_db_path)
@@ -107,10 +109,35 @@ class EpisodeRunner:
 
         if not self._scenarios:
             raise ValueError("No scenarios found")
+
+        # Validate scenarios — reject unplayable, check telemetry quality
+        from src.training.validation import check_data_contamination, validate_all
+
+        self._scenarios = validate_all(self._scenarios)
+        if not self._scenarios:
+            raise ValueError("No valid scenarios after validation")
+
+        # Train/eval split — reserve 20% for evaluation (never used during training)
+        self._rng_split = random.Random(0)  # fixed seed for reproducible split
+        self._rng_split.shuffle(self._scenarios)
+        split_idx = max(1, int(len(self._scenarios) * 0.8))
+        self._train_scenarios = self._scenarios[:split_idx]
+        self._eval_scenarios = self._scenarios[split_idx:]
+
+        # Data contamination check
+        contaminated = check_data_contamination(self._train_scenarios, self._eval_scenarios)
+        if contaminated:
+            logger.warning(
+                "Data contamination: %d scenario IDs in both train and eval",
+                len(contaminated),
+            )
+
         self._rng = random.Random()
         self._stats = TrainingStats()
         logger.info(
-            "EpisodeRunner initialised with %d scenarios (max_difficulty=%s)", len(self._scenarios), max_difficulty
+            "EpisodeRunner initialised with %d scenarios (max_difficulty=%s)",
+            len(self._scenarios),
+            max_difficulty,
         )
 
     @property
@@ -121,9 +148,33 @@ class EpisodeRunner:
     def scenarios(self) -> list[ScenarioDefinition]:
         return self._scenarios
 
+    @property
+    def train_scenarios(self) -> list[ScenarioDefinition]:
+        return self._train_scenarios
+
+    @property
+    def eval_scenarios(self) -> list[ScenarioDefinition]:
+        return self._eval_scenarios
+
     def sample_scenario(self) -> ScenarioDefinition:
-        """Sample a random scenario from the available pool."""
-        return self._rng.choice(self._scenarios)
+        """Sample a random scenario from the training set (not eval)."""
+        return self._rng.choice(self._train_scenarios)
+
+    def evaluate(self, num_episodes: int = 20, agent_fn: Callable | None = None) -> float:
+        """Run episodes on the held-out eval set and return average reward.
+
+        Use this to measure generalisation: train on train_scenarios,
+        evaluate on eval_scenarios the agent has never seen.
+        """
+        rewards = []
+        for i in range(num_episodes):
+            scenario = self._eval_scenarios[i % len(self._eval_scenarios)]
+            try:
+                result = self.run_episode(scenario=scenario, seed=i + 10000, agent_fn=agent_fn)
+                rewards.append(result.reward)
+            except Exception as e:
+                logger.warning("Eval episode %d failed: %s", i, e)
+        return sum(rewards) / max(1, len(rewards))
 
     def run_episode(
         self,
@@ -192,23 +243,24 @@ class EpisodeRunner:
         """Run multiple episodes and return all results with trajectories."""
         results = []
         failed = 0
+        progress_interval = max(1, num_episodes // 10)
         for i in range(num_episodes):
             try:
                 result = self.run_episode(agent_fn=agent_fn)
                 results.append(result)
             except Exception as e:
                 failed += 1
-                logger.warning("Episode %d failed: %s", i + 1, e)
-            if (i + 1) % 10 == 0:
-                logger.info(
-                    "Completed %d/%d episodes (%d failed), avg reward: %.3f",
-                    i + 1,
-                    num_episodes,
-                    failed,
-                    self._stats.avg_reward,
+                logger.warning("[episode=%d] failed: %s", i + 1, e)
+            if (i + 1) % progress_interval == 0 or i == num_episodes - 1:
+                pct = (i + 1) / num_episodes * 100
+                bar = "█" * int(pct // 5) + "░" * (20 - int(pct // 5))
+                print(
+                    f"  {bar} {i + 1}/{num_episodes} episodes, avg reward: {self._stats.avg_reward:.3f}",
+                    end="\r",
                 )
+        print()  # newline after progress bar
         if failed:
-            logger.warning("Batch complete: %d/%d episodes failed", failed, num_episodes)
+            print(f"  ⚠ {failed}/{num_episodes} episodes failed (see logs)")
         return results
 
 
@@ -220,7 +272,12 @@ def _random_agent(_obs: dict, env: SREEnvironment) -> dict:
     if not env.diagnosed:
         if env.step_count < 3 or rng.random() > 0.3:
             action_type = rng.choice(
-                [ActionType.QUERY_METRICS, ActionType.QUERY_LOGS, ActionType.LIST_SERVICES, ActionType.LIST_ALERTS]
+                [
+                    ActionType.QUERY_METRICS,
+                    ActionType.QUERY_LOGS,
+                    ActionType.LIST_SERVICES,
+                    ActionType.LIST_ALERTS,
+                ]
             )
         else:
             action_type = ActionType.DIAGNOSE

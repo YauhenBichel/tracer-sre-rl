@@ -18,6 +18,7 @@ def test_export_jsonl_produces_valid_json():
         path = f.name
 
     count = export_jsonl(results, path)
+
     assert count == 3
 
     lines = Path(path).read_text().strip().split("\n")
@@ -57,10 +58,10 @@ def test_export_preference_pairs():
 
     count = export_preference_pairs(results, path, reward_threshold=0.01)
 
-    if count > 0:
-        line = Path(path).read_text().strip().split("\n")[0]
-        pair = json.loads(line)
-        assert "chosen" in pair
-        assert "rejected" in pair
-        assert pair["chosen"]["reward"] > pair["rejected"]["reward"]
-        assert pair["reward_gap"] >= 0.01
+    assert count > 0, "Expected at least one preference pair from 20 episodes"
+    line = Path(path).read_text().strip().split("\n")[0]
+    pair = json.loads(line)
+    assert "chosen" in pair
+    assert "rejected" in pair
+    assert pair["chosen"]["reward"] > pair["rejected"]["reward"]
+    assert pair["reward_gap"] >= 0.01

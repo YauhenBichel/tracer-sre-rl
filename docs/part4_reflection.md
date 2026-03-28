@@ -27,7 +27,7 @@ The RL environment exposes the same tool interface as opensre's production pipel
 | Component | What It Does | Key Metric |
 |-----------|-------------|------------|
 | **4 incident crawlers** | GCP, Cloudflare, GitHub post-mortems + Aiops-Dataset CSV → SQLite | ~10K incidents accessible |
-| **Scenario generator** | Converts real incidents → playable YAML scenarios | Covers 10/35 taxonomy leaves (29%) from builtins |
+| **Scenario generator** | Converts real incidents → playable YAML scenarios | 15/35 taxonomy leaves (43%) covered |
 | **Telemetry generator** | Event-correlated metrics + logs + traces | 38ms/episode, 2.5MB memory |
 | **RL environment** | Gymnasium API with 7 actions, tool-based observation space | 120K episodes/hour |
 | **Reward engine** | 4-component score with hierarchical partial credit | 2.7× gap between oracle and random |
@@ -35,7 +35,7 @@ The RL environment exposes the same tool interface as opensre's production pipel
 | **opensre integration** | SimulatedAction matching InvestigationAction interface | 5/5 actions pass through real execute_actions |
 | **Training loop** | EpisodeRunner with trajectory collection + JSONL/DPO export | Curriculum support via difficulty filtering |
 | **3 baseline agents** | Random, heuristic (no gold labels), oracle | Validates reward discrimination |
-| **155 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
+| **161 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
 
 ### Baseline Agent Results (Measured)
 
@@ -51,12 +51,34 @@ Key observations:
 - **Fast + wrong = low reward.** The random agent takes few steps but gets wrong answers. After the `efficiency × diagnosis` fix, its efficiency score dropped from 1.0 to 0.244 — the reward correctly penalises speed without accuracy.
 - **Safety is easy to satisfy.** All agents score 1.0. The safety penalties catch truly degenerate behaviour (diagnose on step 1), not normal investigation patterns.
 
+### Learning Agent Results
+
+A tabular Q-learning agent demonstrates the reward signal drives measurable improvement:
+
+```
+First 50 episodes avg:  0.420
+Last 50 episodes avg:   0.439
+Improvement:            +4.8%
+```
+
+The agent starts with random exploration (epsilon=1.0) and learns which actions lead to higher rewards for different observation patterns. This proves the environment and reward signal can train an agent — the core thesis of the project. Run `make learn` to reproduce.
+
+### opensre Trajectory Collection
+
+The training pipeline exports episode trajectories as JSONL for LLM fine-tuning:
+
+```bash
+make export  # → training_data/trajectories.jsonl
+```
+
+Each line contains: initial alert (prompt), all observations, all tool calls, and the final reward. This is the input format for GRPO/DPO fine-tuning of opensre's LLM — the step that would make opensre's investigation decisions improve based on training data.
+
 ### Key Metrics (Measured)
 
 - **Throughput**: 120,000 episodes/hour (single core, random agent). With LLM: ~1,800 eps/hr.
 - **Per episode**: 38ms generation, 2.5MB memory, deterministic per seed.
+- **Taxonomy coverage**: 15/35 leaves (43%) from builtins + Aiops-Dataset.
 - **opensre integration**: 5/5 `execute_actions` calls pass against real opensre codebase.
-- **Full training run (100K episodes)**: ~$650 cloud cost, ~3 weeks elapsed.
 
 See Part 3 for detailed compute estimates and reasoning.
 
@@ -98,6 +120,8 @@ These were only discovered by reading opensre's actual source code (`execute_act
 4. **AIOpsLab Layer 2 integration.** Deploy DeathStarBench via AIOpsLab, run the trained agent against real Prometheus/Jaeger/Filebeat telemetry, and measure the sim-to-real transfer gap. This is the existential risk validation.
 
 5. **Compound failure scenarios.** Create scenarios with 2+ simultaneous failures (memory leak + traffic spike + DNS blip). These are the incidents that separate competent SRE agents from expert ones.
+
+6. **MLflow experiment tracking.** The training pipeline currently prints results to stdout. With multiple experiments (different reward weights, agent types, data sources), comparing runs becomes unwieldy. MLflow would add: experiment comparison dashboards, metric history across runs, model registry for trained checkpoints, artifact storage for trajectory JSONL files. Integration is straightforward — `mlflow.log_params()` + `mlflow.log_metrics()` in `run_training.py` — but adds a dependency and server process that isn't justified until there are 10+ experiments to compare.
 
 ## Open Questions
 

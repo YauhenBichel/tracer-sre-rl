@@ -18,6 +18,7 @@ def test_taxonomy_categories():
 def test_taxonomy_find():
     root = build_default_taxonomy()
     node = root.find("infrastructure.database.connection_pool")
+
     assert node is not None
     assert node.name == "connection_pool"
 
@@ -34,6 +35,7 @@ def test_taxonomy_leaves():
 
 def test_similarity():
     scorer = DiagnosisScorer()
+
     assert (
         scorer._similarity("infrastructure.database.connection_pool", "infrastructure.database.connection_pool") == 1.0
     )

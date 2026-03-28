@@ -32,6 +32,7 @@ def _action(action_type, target=0, time_start=0, time_end=89, diagnosis_idx=0, r
 
 def test_env_reset(env):
     obs, info = env.reset()
+
     assert "text_observation" in obs
     assert obs["step_count"] == 0
     assert "scenario" in info
@@ -40,6 +41,7 @@ def test_env_reset(env):
 def test_env_query_metrics(env):
     env.reset()
     obs, reward, terminated, _, _ = env.step(_action(ActionType.QUERY_METRICS))
+
     assert "Metrics for" in obs["text_observation"] or "No metrics" in obs["text_observation"]
     assert not terminated
     assert reward == 0.0
@@ -69,6 +71,7 @@ def test_env_full_episode(env):
     env.step(_action(ActionType.QUERY_METRICS, target=0, time_start=40))
     env.step(_action(ActionType.QUERY_METRICS, target=1, time_start=40))
     _obs, reward, terminated, _, _ = env.step(_action(ActionType.DIAGNOSE))
+
     assert not terminated
 
     _obs, reward, terminated, _, _ = env.step(_action(ActionType.REMEDIATE))
@@ -84,11 +87,13 @@ def test_env_truncation(scenarios):
         _, _, _, truncated, _ = env.step(_action(ActionType.QUERY_METRICS, target=i % len(scenario.services)))
         if truncated:
             break
+
     assert truncated
     env.close()
 
 
 def test_all_scenarios_work(scenarios):
+    assert len(scenarios) > 0
     for scenario in scenarios:
         env = SREEnvironment(scenario=scenario, seed=42)
         obs, info = env.reset()

@@ -46,17 +46,20 @@ class TestMetricsGenerator:
     def test_generates_samples_for_service(self, rng, services, normal_events):
         gen = MetricsGenerator(rng, build_default_registry())
         samples = gen.generate(services[0], timestamp=100, active_events=normal_events)
+
         assert len(samples) > 0
         assert all(s.service == "gateway" for s in samples)
 
     def test_all_values_non_negative(self, rng, services, normal_events):
         gen = MetricsGenerator(rng, build_default_registry())
+        assert len(services) > 0
         for svc in services:
             samples = gen.generate(svc, timestamp=100, active_events=normal_events)
             assert all(s.value >= 0 for s in samples), f"Negative metric for {svc.name}"
 
     def test_percent_metrics_capped_at_100(self, rng, services, normal_events):
         gen = MetricsGenerator(rng, build_default_registry())
+        assert len(services) > 0
         for svc in services:
             samples = gen.generate(svc, timestamp=100, active_events=normal_events)
             for s in samples:
@@ -68,6 +71,7 @@ class TestLogGenerator:
     def test_generates_log_entry(self, rng, services, normal_events):
         gen = LogGenerator(rng)
         entry = gen.generate(services[0], timestamp=100, active_events=normal_events)
+
         assert entry is not None
         assert entry.service == "gateway"
 
@@ -77,6 +81,7 @@ class TestLogGenerator:
         error_count = sum(
             1 for s in range(100) if LogGenerator(random.Random(s)).should_generate(services[1], error_events)
         )
+
         assert error_count > normal_count
 
     def test_log_level_reflects_error_events(self, services, error_events):
@@ -100,6 +105,7 @@ class TestTraceGenerator:
         gen = TraceGenerator(rng)
         spans = gen.generate(services, timestamp=100, active_events=normal_events)
         service_names = {s.service for s in spans}
+
         assert "gateway" in service_names
         assert "app" in service_names
         assert "db" in service_names
@@ -108,6 +114,7 @@ class TestTraceGenerator:
         gen = TraceGenerator(rng)
         spans = gen.generate(services, timestamp=100, active_events=normal_events)
         trace_ids = {s.trace_id for s in spans}
+
         assert len(trace_ids) == 1
 
     def test_error_events_cause_elevated_latency(self, services, error_events):
@@ -119,5 +126,7 @@ class TestTraceGenerator:
             error_spans = TraceGenerator(random.Random(seed)).generate(services, 100, error_events)
             normal_durations.extend(s.duration_ms for s in normal_spans if s.service == "app")
             error_durations.extend(s.duration_ms for s in error_spans if s.service == "app")
-        if normal_durations and error_durations:
-            assert max(error_durations) > max(normal_durations)
+
+        assert len(normal_durations) > 0
+        assert len(error_durations) > 0
+        assert max(error_durations) > max(normal_durations)

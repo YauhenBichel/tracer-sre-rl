@@ -48,6 +48,7 @@ def test_generate_picks_database_topology_for_db_incident():
     scenario = gen.generate(_make_incident(taxonomy_labels=["infrastructure.database.connection_pool"]))
 
     service_types = {s["service_type"] for s in scenario["services"]}
+
     assert "database" in service_types
 
 
@@ -56,6 +57,7 @@ def test_generate_picks_application_topology_for_app_incident():
     scenario = gen.generate(_make_incident(taxonomy_labels=["application.memory.leak"]))
 
     service_types = {s["service_type"] for s in scenario["services"]}
+
     assert "application" in service_types
 
 
@@ -64,6 +66,7 @@ def test_generate_uses_generic_timeline_for_unknown_taxonomy():
     scenario = gen.generate(_make_incident(taxonomy_labels=["operational.deployment.bad_deploy"]))
 
     event_types = {e["event_type"] for e in scenario["timeline"]}
+
     assert "normal_traffic" in event_types
 
 
@@ -88,6 +91,7 @@ def test_gold_standard_has_root_cause():
     scenario = gen.generate(_make_incident())
 
     gold = scenario["gold_standard"]
+
     assert len(gold["root_causes"]) >= 1
     assert gold["root_causes"][0]["taxonomy_label"] == "infrastructure.database.connection_pool"
 
@@ -98,6 +102,7 @@ def test_gold_standard_includes_remediations():
     scenario = gen.generate(incident)
 
     remediations = scenario["gold_standard"]["remediations"]
+
     assert len(remediations) == 2
     assert remediations[0]["action"] == "Increase max_connections"
 
@@ -107,6 +112,7 @@ def test_gold_standard_fallback_remediation():
     scenario = gen.generate(_make_incident(remediation=[]))
 
     remediations = scenario["gold_standard"]["remediations"]
+
     assert len(remediations) >= 1
 
 
@@ -125,7 +131,8 @@ def test_save_writes_file():
         path = gen.save(_make_incident(), tmpdir)
         assert path.exists()
         content = yaml.safe_load(path.read_text())
-        assert content["id"] == "generated-test-001"
+
+    assert content["id"] == "generated-test-001"
 
 
 def test_generate_yaml_header_contains_source():
@@ -154,6 +161,7 @@ def test_generate_definition_is_playable():
     scenario = gen.generate_definition(_make_incident())
     env = SREEnvironment(scenario=scenario, seed=42)
     obs, _info = env.reset()
+
     assert len(obs["text_observation"]) > 0
     env.close()
 
@@ -165,6 +173,7 @@ def test_batch_generate_filters_by_quality():
         _make_incident(id="bad", quality_score=0.1),
     ]
     results = gen.batch_generate(incidents, min_quality=0.5)
+
     assert len(results) == 1
 
 
@@ -175,4 +184,5 @@ def test_batch_generate_filters_by_taxonomy():
         _make_incident(id="unlabeled", taxonomy_labels=[]),
     ]
     results = gen.batch_generate(incidents)
+
     assert len(results) == 1
