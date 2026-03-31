@@ -40,7 +40,7 @@ All four are validated in the baseline comparison (random: 0.321, heuristic: 0.4
 **How the training data is generated:**
 1. `python -m app.main crawl` runs 3 crawlers (GCP, Cloudflare, GitHub) → 261 incidents → `data/incidents.db` (SQLite)
 2. `load_aiops_groundtruth("data/groundtruth-all.csv")` reads 241 labeled faults from the included CSV
-3. `ScenarioGenerator.batch_generate(incidents)` converts each incident to a `ScenarioDefinition` by picking a topology template, building an event timeline, and setting gold-standard root causes
+3. `ScenarioGenerator.batch_generate(incidents)` converts each incident to a `ScenarioDefinition` by picking a topology template, building an event timeline, and setting correct root causes
 4. `EpisodeRunner` combines generated + builtin scenarios → 246+ total scenarios for training
 
 **Key files:**
@@ -88,9 +88,9 @@ Scenario perturbation (`perturb_scenario()`) jitters timing ±15% and magnitudes
 **Why:** This is the hard part. A binary reward (right/wrong) can't capture the richness of SRE investigation. The incident data shows only 25% of incidents have a single definitive root cause. The reward must handle ambiguity, partial correctness, and the interaction between investigation thoroughness and speed.
 
 **How:** Four scorers compose the reward:
-- `DiagnosisScorer` — hierarchical taxonomy matching. Exact match: 1.0. Right subcategory, wrong leaf: 0.7. Right category: 0.4. Wrong: 0.0. Supports multiple gold-standard root causes with relevance weights.
+- `DiagnosisScorer` — hierarchical taxonomy matching. Exact match: 1.0. Right subcategory, wrong leaf: 0.7. Right category: 0.4. Wrong: 0.0. Supports multiple correct root causes with relevance weights.
 - `EfficiencyScorer` — linear decay from `ideal_steps` (5) to `max_steps`. Multiplied by diagnosis score so fast+wrong = 0.
-- `RemediationScorer` — exact match against gold-standard remediations with effectiveness weights. Partial credit for generic actions (restart: 0.1, scale: 0.2).
+- `RemediationScorer` — exact match against correct remediations with effectiveness weights. Partial credit for generic actions (restart: 0.1, scale: 0.2).
 - `SafetyScorer` — penalises hasty diagnosis (<2 queries: -0.3) and tunnel vision (<2 services queried: -0.2).
 
 All thresholds are configurable in `config/reward.yaml`.
@@ -244,4 +244,4 @@ See `.github/workflows/ci.yml`.
 - No actual RL policy update — trajectories are collected and exported, but GRPO/PPO training requires a GPU cluster and trl/DeepSpeed (outside MVP scope)
 - Log metric values are approximate, not numerically identical to metric time-series (log says "active=97", metric says "avg=72")
 - 18/35 taxonomy leaves covered (51%) — more crawlers and data sources can expand coverage
-- Sim-to-real gap measured (cpu_percent vs java_lang_OperatingSystem_SystemCpuLoad) but not closed
+- Synthetic-to-real gap measured (cpu_percent vs java_lang_OperatingSystem_SystemCpuLoad) but not closed

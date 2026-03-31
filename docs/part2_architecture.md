@@ -9,7 +9,7 @@ A scalable system that continuously generates high-fidelity failure scenarios fo
 ```
 DATA PLANE:     Crawlers (GCP, Cloudflare, GitHub, Aiops-Dataset)
                   → Taxonomy classifier (35 leaf nodes)
-                    → ScenarioGenerator (topology + timeline + gold standard)
+                    → ScenarioGenerator (topology + timeline + correct answers)
 
 SIMULATION:     Layer 1: Synthetic telemetry (1,000 eps/hr, $0.001/ep)
                 Layer 2: AIOpsLab real microservices (10 eps/hr, $0.10/ep)
@@ -28,11 +28,11 @@ TRAINING:       SREEnvironment (Gymnasium) ←→ opensre (LangGraph)
 
 **2. Classification.** Incidents are classified against the hierarchical taxonomy (35 leaf nodes across infrastructure, application, operational, external). Classification uses keyword pattern matching from `config/crawlers.yaml` and taxonomy label inheritance from the source data. Coverage gaps are tracked per taxonomy node.
 
-**3. Scenario Generation.** The `ScenarioGenerator` converts each classified incident into a playable scenario YAML: selects a service topology template (5 options by failure category), builds an event timeline (8 templates by failure type), sets gold-standard root causes and remediations. The `ScenarioGenerator` combines generated scenarios with 5 hand-authored builtin scenarios. Each scenario is perturbed per seed (±15% timing, ±20% magnitudes) for unlimited variation.
+**3. Scenario Generation.** The `ScenarioGenerator` converts each classified incident into a playable scenario YAML: selects a service topology template (5 options by failure category), builds an event timeline (8 templates by failure type), sets correct root causes and remediations. The `ScenarioGenerator` combines generated scenarios with 5 hand-authored builtin scenarios. Each scenario is perturbed per seed (±15% timing, ±20% magnitudes) for unlimited variation.
 
 **4. Training.** The `EpisodeRunner` samples scenarios (weighted by difficulty for curriculum learning), runs episodes through the `SREEnvironment`, and collects full trajectories (observation, action, reward per step). Trajectories are exported as JSONL for LLM fine-tuning (GRPO) or as preference pairs for DPO. The open-sre-agent's LangGraph pipeline can run against the environment via `SimulatedAction` objects that replace real Grafana/Datadog tool calls.
 
-**5. Evaluation.** The `RewardCalculator` scores each episode across 4 dimensions: diagnosis accuracy (hierarchical taxonomy matching with partial credit), efficiency (steps × diagnosis coupling), remediation quality (gold-standard matching), and safety (investigation thoroughness). Results feed back into the coverage matrix to prioritise gap-filling.
+**5. Evaluation.** The `RewardCalculator` scores each episode across 4 dimensions: diagnosis accuracy (hierarchical taxonomy matching with partial credit), efficiency (steps × diagnosis coupling), remediation quality (correct matching), and safety (investigation thoroughness). Results feed back into the coverage matrix to prioritise gap-filling.
 
 ---
 
@@ -194,7 +194,7 @@ Real Incident Data                    Synthetic Telemetry Generation
 VOID (~10K incidents)  ──┐
 Aiops-Dataset (labeled)──┤──► ScenarioGenerator ──► Scenario YAML
 GCP/Cloudflare feeds  ──┘    (topology, timeline,    (parameterised)
-                              gold standard)              │
+                              correct answers)              │
                                                           │ + perturbation per seed
                                                           ▼
 LogHub (300M+ real logs)──► Log template ──► TelemetryGenerator
@@ -231,7 +231,7 @@ LogHub (300M+ real logs)──► Log template ──► TelemetryGenerator
 | **Coverage** | Any fault in the taxonomy. Can generate scenarios for rare failures (split-brain, data corruption) that are dangerous or impossible to reproduce in real infrastructure. |
 | **Realism** | Medium-high. Real incident patterns drive the scenarios. Log/metric/trace signals are correlated (an error_spike event produces matching ERROR logs, elevated error metrics, and ERROR trace spans simultaneously). Weakness: metric values in logs are approximate, not numerically identical to metric time-series. |
 
-**Key limitation:** The agent does not execute remediation actions against real systems. It proposes remediations and is scored against gold standards. This is acceptable because SRE investigation (reading telemetry, correlating signals, forming hypotheses) is ~80% of the work, and it's the skill that benefits most from RL training. Remediation execution is validated in Layer 2.
+**Key limitation:** The agent does not execute remediation actions against real systems. It proposes remediations and is scored against correct answerss. This is acceptable because SRE investigation (reading telemetry, correlating signals, forming hypotheses) is ~80% of the work, and it's the skill that benefits most from RL training. Remediation execution is validated in Layer 2.
 
 #### Layer 2 — AIOpsLab Validation (recommended for transfer testing)
 
@@ -277,9 +277,9 @@ The core challenge: in coding, "correct" means tests pass. In SRE, "correct" is 
 
 **The problem.** The VOID database [VOID] shows that only ~25% of real incidents have a single definitive root cause. The majority involve multiple contributing factors. A database connection pool exhaustion might be caused by a traffic spike (proximate) AND an undersized pool configuration (underlying) AND a missing circuit breaker (contributing). All three are valid diagnoses at different levels of depth.
 
-**Our approach: multi-label gold standard with relevance-weighted scoring.**
+**Our approach: multi-label correct answers with relevance-weighted scoring.**
 
-Each scenario defines multiple gold-standard root causes with relevance weights:
+Each scenario defines multiple correct root causes with relevance weights:
 
 ```yaml
 gold_standard:
@@ -290,7 +290,7 @@ gold_standard:
       relevance: 0.7     # contributing factor
 ```
 
-The agent's diagnosis is scored against all gold-standard root causes, and the **best match wins**:
+The agent's diagnosis is scored against all correct root causes, and the **best match wins**:
 
 ```
 R_diagnosis = max_i( similarity(d, gᵢ) × relevance(gᵢ) )
@@ -298,7 +298,7 @@ R_diagnosis = max_i( similarity(d, gᵢ) × relevance(gᵢ) )
 
 This means diagnosing the traffic spike (relevance 0.7) still earns substantial credit even if the "primary" root cause is the connection pool. The agent is rewarded for identifying *any valid contributing factor*, weighted by how central it is.
 
-**Handling novel diagnoses.** When the agent produces a diagnosis not in the gold standard, the hierarchical taxonomy provides a useful fallback. An agent that diagnoses `infrastructure.database.replication_lag` for a connection pool issue gets 0.7 (correct subcategory `infrastructure.database`) rather than 0.0 (wrong answer). This learning signal is critical for RL — it tells the agent "you're in the right area, keep looking."
+**Handling novel diagnoses.** When the agent produces a diagnosis not in the correct answers, the hierarchical taxonomy provides a useful fallback. An agent that diagnoses `infrastructure.database.replication_lag` for a connection pool issue gets 0.7 (correct subcategory `infrastructure.database`) rather than 0.0 (wrong answer). This learning signal is critical for RL — it tells the agent "you're in the right area, keep looking."
 
 ### Question 2: How Do You Score Partial Progress?
 
@@ -306,7 +306,7 @@ This means diagnosing the traffic spike (relevance 0.7) still earns substantial 
 
 The taxonomy tree provides a natural similarity metric. Deeper common prefixes mean closer diagnoses:
 
-| Agent's Diagnosis | Gold Standard | Common Prefix | Depth | Score |
+| Agent's Diagnosis | Correct Answers | Common Prefix | Depth | Score |
 |---|---|---|---|---|
 | `infrastructure.database.connection_pool` | `infrastructure.database.connection_pool` | exact match | 3 | **1.0** |
 | `infrastructure.database.replication_lag` | `infrastructure.database.connection_pool` | `infrastructure.database` | 2 | **0.7** |
@@ -337,7 +337,7 @@ The key architectural decision: the telemetry generator pre-computes the *entire
 
 1. **Pre-generated timeline.** All telemetry (metrics, logs, traces) for the full episode duration is generated upfront. The agent queries `time_start=40, time_end=89` and sees the relevant window immediately — no waiting for real-time effects.
 
-2. **End-of-episode end-of-episode reward.** The four-component reward is computed once when the agent has both diagnosed and proposed remediation. Sparse rewards are harder for RL to learn from than step-by-step rewards, but they avoid the wrong reward attribution that come with intermediate rewards in unpredictable environments.
+2. **End-of-episode reward.** The four-component reward is computed once when the agent has both diagnosed and proposed remediation. The reward is given once at the end, not after each step. This is simpler to get right but harder for the agent to learn from.
 
 3. **Truncation penalty.** If the agent runs out of steps before diagnosing, it receives a halved reward (`truncation_factor = 0.5`). If it diagnosed but didn't remediate, it receives `diagnosis_reward × 0.5`. This provides learning signal even for incomplete episodes.
 
@@ -354,9 +354,9 @@ Humans are needed for: novel root causes not in taxonomy, taxonomy expansion, an
 ```
 R = 0.40 × R_diagnosis + 0.20 × R_efficiency + 0.25 × R_remediation + 0.15 × R_safety
 
-R_diagnosis:    Hierarchical taxonomy similarity × gold relevance weight
+R_diagnosis:    Hierarchical taxonomy similarity × relevance weight
 R_efficiency:   (Linear decay from ideal_steps to max_steps) × R_diagnosis
-R_remediation:  Gold-standard effectiveness score, or partial credit for generic actions
+R_remediation:  Correct effectiveness score, or partial credit for generic actions
 R_safety:       1.0 - penalties for hasty diagnosis (-0.3) and tunnel vision (-0.2)
 ```
 
@@ -367,8 +367,8 @@ The reward function has been validated to discriminate between agent quality lev
 | Agent | Avg Reward | Diagnosis | Efficiency | Remediation | Safety |
 |-------|-----------|-----------|------------|-------------|--------|
 | Random | 0.321 | 0.244 | 0.244 | 0.100 | 1.000 |
-| Heuristic (no gold labels) | 0.464 | 0.160 | 0.077 | 0.940 | 1.000 |
-| Oracle (gold labels) | 0.875 | 0.960 | 0.480 | 0.980 | 1.000 |
+| Heuristic (no correct answers) | 0.464 | 0.160 | 0.077 | 0.940 | 1.000 |
+| Oracle (correct answers) | 0.875 | 0.960 | 0.480 | 0.980 | 1.000 |
 
 The 2.7× gap between oracle (0.875) and random (0.321) provides clear RL learning signal. The heuristic agent's low diagnosis score (0.160) confirms that diagnosis accuracy is the primary bottleneck — the skill that benefits most from training.
 
@@ -386,7 +386,7 @@ The taxonomy has 35 leaf failure types. The MVP covers 18 of them (51%) across 5
 Aiops-Dataset (241 faults)─┐
 GCP/Cloudflare/GitHub    ──┤──► ScenarioGenerator ──► scenario.yaml ──► SREEnvironment
 (261 crawled incidents)  ──┘    (topology + timeline     (perturbation per seed
-                                 + gold standard)         + telemetry generation)
+                                 + correct answers)         + telemetry generation)
 ```
 
 **Stage 1: Crawl and normalise.** Three crawlers (`GCPIncidentCrawler`, `CloudflareIncidentCrawler`, `GitHubPostmortemCrawler`) fetch real incidents from public APIs and normalise them into `NormalisedIncident` objects stored in SQLite (261 incidents, 288 KB). Additionally, `load_aiops_groundtruth()` reads the Aiops-Dataset groundtruth CSV — 241 labeled fault scenarios from a real 46-instance microservice system, included in the repo at `data/groundtruth-all.csv` (16 KB). Each incident has: title, summary, taxonomy labels, quality score.
@@ -397,7 +397,7 @@ GCP/Cloudflare/GitHub    ──┤──► ScenarioGenerator ──► scenario
 
 - **Timeline construction.** Maps taxonomy labels to event timeline templates. A `connection_exhaustion` incident gets: `normal_traffic → traffic_ramp → connection_exhaustion → error_spike → alert`. 8 event templates cover the most common failure patterns. Incidents without a matching template get a generic `error_spike → latency_spike → alert` timeline.
 
-- **Gold standard.** Root causes come from the incident's taxonomy labels with relevance weights. Remediations come from the incident's remediation field (if populated) or a generic fallback.
+- **Correct answers.** Root causes come from the incident's taxonomy labels with relevance weights. Remediations come from the incident's remediation field (if populated) or a generic fallback.
 
 - **Difficulty estimation.** Derived from incident severity: critical → 0.6, major → 0.5, minor → 0.3.
 
@@ -455,7 +455,7 @@ A high-frequency, low-coverage, low-agent-score node gets the highest priority. 
 
 ## RL Loop Closure
 
-The learning loop: (1) sample scenario from config, (2) opensre investigates via SimulatedActions, (3) RewardCalculator scores against gold standard, (4) trajectory saved as JSONL, (5) GRPO/DPO fine-tuning updates the LLM, (6) improved model deployed back to opensre.
+The learning loop: (1) sample scenario from config, (2) opensre investigates via SimulatedActions, (3) RewardCalculator scores against correct answers, (4) trajectory saved as JSONL, (5) GRPO/DPO fine-tuning updates the LLM, (6) improved model deployed back to opensre.
 
 RL improves two opensre decisions: `plan_actions` (which tools to call) and `root_cause_diagnosis` (which root cause to propose). Generalisation comes from perturbation (different seed = different telemetry), curriculum (easy → hard), and scenario diversity (246 scenarios across 18 taxonomy leaves).
 
