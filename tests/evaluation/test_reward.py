@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.evaluation.reward_calculator import RewardCalculator
-from src.generators.loader import ScenarioLoader
+from app.evaluation.reward_calculator import RewardCalculator
+from app.incidents.scenario_loader import ScenarioLoader
 
 
 @pytest.fixture

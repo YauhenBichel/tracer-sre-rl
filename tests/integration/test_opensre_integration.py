@@ -8,14 +8,14 @@ expected by opensre's execute_actions pipeline:
   - AgentState has all required fields including investigation_started_at
 """
 
-from src.agent_adapter import SREToolAdapter
-from src.generators.loader import ScenarioLoader
-from src.integration.evidence_source import (
+from app.incidents.scenario_loader import ScenarioLoader
+from app.integration.agent_adapter import SREToolAdapter
+from app.integration.evidence_source import (
     SIMULATED_SOURCE_KEY,
     build_simulated_sources,
     create_simulated_actions,
 )
-from src.integration.state_adapter import (
+from app.integration.state_adapter import (
     scenario_to_agent_state,
     score_agent_state,
 )

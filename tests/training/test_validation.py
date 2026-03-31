@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from src.generators.loader import ScenarioLoader
-from src.models import ScenarioDefinition
-from src.training.validation import (
+from app.incidents.scenario_loader import ScenarioLoader
+from app.models import ScenarioDefinition
+from app.training.validation import (
     check_data_contamination,
     validate_all,
     validate_scenario,

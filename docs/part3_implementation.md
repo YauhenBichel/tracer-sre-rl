@@ -19,7 +19,7 @@ The novel contribution is the **pipeline that connects them**: real incidents fr
 
 ## What I Targeted: The Reward Signal
 
-The highest-risk component is the reward signal. The Part 1 research establishes why: coding agents have tractable rewards (tests pass or fail), but distributed systems have ambiguous, delayed, context-dependent correctness. If the reward signal doesn't work, the entire architecture fails regardless of how good the simulation is.
+The highest-risk component is the reward signal. The Part 1 research establishes why: coding agents have workable rewards (tests pass or fail), but distributed systems have ambiguous, delayed, context-dependent correctness. If the reward signal doesn't work, the entire architecture fails regardless of how good the simulation is.
 
 The reward had to satisfy four properties simultaneously:
 1. **Handle multiple valid root causes** — an incident can have several defensible diagnoses
@@ -38,15 +38,15 @@ All four are validated in the baseline comparison (random: 0.321, heuristic: 0.4
 **Why:** Hand-authoring YAML scenarios doesn't scale. Real incidents provide ground-truth failure patterns. The Aiops-Dataset groundtruth CSV (241 labeled faults) is included in the repo at `data/groundtruth-all.csv` (16 KB). The crawlers fetch 261 more incidents from public APIs. Combined: 18/35 taxonomy leaves (51%) covered.
 
 **How the training data is generated:**
-1. `run_crawler.py` runs 3 crawlers (GCP, Cloudflare, GitHub) → 261 incidents → `data/incidents.db` (SQLite)
+1. `python -m app.main crawl` runs 3 crawlers (GCP, Cloudflare, GitHub) → 261 incidents → `data/incidents.db` (SQLite)
 2. `load_aiops_groundtruth("data/groundtruth-all.csv")` reads 241 labeled faults from the included CSV
 3. `ScenarioGenerator.batch_generate(incidents)` converts each incident to a `ScenarioDefinition` by picking a topology template, building an event timeline, and setting gold-standard root causes
 4. `EpisodeRunner` combines generated + builtin scenarios → 246+ total scenarios for training
 
 **Key files:**
-- `src/crawler/models.py` — `NormalisedIncident` dataclass + `IncidentCrawler` ABC
-- `src/crawler/crawlers/` — GCP, Cloudflare, GitHub crawlers + Aiops-Dataset CSV loader
-- `src/crawler/scenario_generator.py` — converts incidents to playable scenarios (`batch_generate()`, `generate_definition()`)
+- `app/incidents/models.py` — `NormalisedIncident` dataclass + `IncidentCrawler` ABC
+- `app/incidents/crawlers/` — GCP, Cloudflare, GitHub crawlers + Aiops-Dataset CSV loader
+- `app/incidents/scenario_generator.py` — converts incidents to playable scenarios (`batch_generate()`, `generate_definition()`)
 
 ### Component 2: Synthetic Telemetry Generator (Pillar 3)
 
@@ -62,10 +62,10 @@ All four are validated in the baseline comparison (random: 0.321, heuristic: 0.4
 Scenario perturbation (`perturb_scenario()`) jitters timing ±15% and magnitudes ±20% per seed, so the same scenario produces different telemetry every episode — preventing memorisation.
 
 **Key files:**
-- `src/generators/telemetry.py` — orchestrator
-- `src/generators/metrics.py`, `logs.py`, `traces.py` — sub-generators
-- `src/generators/effects/` — 9 effect handlers (registry pattern)
-- `src/generators/perturbation.py` — per-seed variation
+- `app/telemetry/telemetry.py` — orchestrator
+- `app/telemetry/metrics.py`, `logs.py`, `traces.py` — sub-generators
+- `app/telemetry/effects/` — 9 effect handlers (registry pattern)
+- `app/telemetry/perturbation.py` — per-seed variation
 
 ### Component 3: RL Environment (Pillar 3 + 4)
 
@@ -76,10 +76,10 @@ Scenario perturbation (`perturb_scenario()`) jitters timing ±15% and magnitudes
 **How:** `SREEnvironment(gym.Env)` implements `reset()` and `step()`. Observations are natural language text (metrics tables, log entries, trace summaries) — designed for LLM agents. The agent doesn't see all telemetry at once; it must choose what to query, mimicking real SRE investigation where information retrieval is itself a skill.
 
 **Key files:**
-- `src/environment/env.py` — Gymnasium environment
-- `src/environment/actions.py` — 7 action types
-- `src/environment/formatter.py` — telemetry → text rendering
-- `src/environment/state.py` — episode state tracking
+- `app/rl_env/env.py` — Gymnasium environment
+- `app/rl_env/actions.py` — 7 action types
+- `app/rl_env/formatter.py` — telemetry → text rendering
+- `app/rl_env/state.py` — episode state tracking
 
 ### Component 4: Evaluation Harness (Pillar 4)
 
@@ -96,9 +96,9 @@ Scenario perturbation (`perturb_scenario()`) jitters timing ±15% and magnitudes
 All thresholds are configurable in `config/reward.yaml`.
 
 **Key files:**
-- `src/evaluation/reward_calculator.py` — composes 4 scorers
-- `src/evaluation/scorers/` — individual scorer implementations
-- `src/evaluation/reward_breakdown.py` — immutable breakdown with weights
+- `app/evaluation/reward_calculator.py` — composes 4 scorers
+- `app/evaluation/scorers/` — individual scorer implementations
+- `app/evaluation/reward_breakdown.py` — immutable breakdown with weights
 - `config/reward.yaml` — all thresholds and weights
 
 ### Component 5: opensre Integration (not in suggested scopes)
@@ -115,10 +115,10 @@ All thresholds are configurable in `config/reward.yaml`.
 **Verified end-to-end:** opensre's LLM investigated a simulated "Disk Full" scenario, autonomously planned 4 tool calls across 3 investigation loops, gathered evidence from synthetic telemetry, and correctly diagnosed: *"high disk usage on postgres-primary caused cascading failures"* with 100% validity.
 
 **Key files:**
-- `src/integration/opensre_runner.py` — custom LangGraph graph builder + `run_with_opensre()`
-- `src/integration/evidence_source.py` — `SimulatedAction` matching `InvestigationAction` interface
-- `src/integration/state_adapter.py` — `AgentState` conversion + reward scoring
-- `src/agent_adapter.py` — `SREToolAdapter` for LLM function-calling APIs
+- `app/integration/opensre_runner.py` — custom LangGraph graph builder + `run_with_opensre()`
+- `app/integration/evidence_source.py` — `SimulatedAction` matching `InvestigationAction` interface
+- `app/integration/state_adapter.py` — `AgentState` conversion + reward scoring
+- `app/integration/agent_adapter.py` — `SREToolAdapter` for LLM function-calling APIs
 
 ### Component 6: Training Loop
 
@@ -129,8 +129,8 @@ All thresholds are configurable in `config/reward.yaml`.
 **How:** `EpisodeRunner` samples scenarios (with optional difficulty filtering for curriculum learning), runs episodes, collects full trajectories (observation, action, reward per step), and tracks per-scenario statistics. `export_jsonl()` and `export_preference_pairs()` output training data for GRPO and DPO respectively.
 
 **Key files:**
-- `src/training/episode_runner.py` — episode runner with trajectory collection
-- `src/training/trajectory_export.py` — JSONL and preference pair export
+- `app/training/episode_runner.py` — episode runner with trajectory collection
+- `app/training/trajectory_export.py` — JSONL and preference pair export
 
 ## How I Used AI-Assisted Development
 
@@ -143,7 +143,7 @@ This project was built entirely using **Claude Code** as the primary development
 3. **Critical self-review.** Asked Claude Code to independently audit the codebase against the assessment requirements. It identified 6 breaking issues in the opensre integration (missing `parameter_extractor`, wrong `resolved_integrations` structure, etc.) — all fixed.
 
 4. **Where I intervened manually:**
-   - Reward function tuning — initial weights produced degenerate behaviour (fast wrong answers scored too high). The `efficiency × diagnosis` coupling was a manual design decision.
+   - Reward function tuning — initial weights produced broken behaviour (fast wrong answers scored too high). The `efficiency × diagnosis` coupling was a manual design decision.
    - Log template fidelity — Claude Code generated generic templates, but a connection pool scenario was showing "Deadlock detected" errors. I restructured the log generator to be event-aware.
    - opensre integration — required reading the actual opensre source code (`execute_actions.py`, `state.py`, `routing.py`) to understand the exact interface contracts.
 
@@ -157,7 +157,7 @@ Measured on Apple M-series laptop, single core:
 | **Full episode (random agent)** | 29ms per episode | Includes generation + 5-15 agent steps + reward computation. |
 | **Memory per episode** | 2.5MB | Telemetry held in memory (tuples of frozen dataclasses). No accumulation across episodes. |
 | **Throughput** | 120,000 episodes/hour | Single CPU core, random agent. With LLM agent (~200ms/step × 10 steps), drops to ~1,800 eps/hr per GPU. |
-| **Test suite** | 161 tests in 3.1 seconds | Full coverage of all components. |
+| **Test suite** | 169 tests in 3.1 seconds | Full coverage of all components. |
 
 ### At Scale (100K training episodes)
 
@@ -187,14 +187,14 @@ git clone <repo-url>
 cd tracer-sre-rl
 pip install -r requirements.txt
 
-# Run tests (161 tests, ~3 seconds)
+# Run tests (169 tests, ~3 seconds)
 python -m pytest tests/ -v
 
 # Run baseline comparison (3 agents × 5 scenarios)
-python demo.py --quiet
+python python -m app.main check-reward --quiet
 
 # Run training loop with trajectory export
-python run_training.py --episodes 100 --export training_data/trajectories.jsonl
+python python -m app.main train --episodes 100 --export training_data/trajectories.jsonl
 
 # Run opensre integration
 python -m src.integration.opensre_runner
@@ -216,7 +216,7 @@ PYTHONPATH="../opensre:." python -m src.integration.opensre_runner --use-opensre
 ### Docker
 
 ```bash
-docker compose up test          # Run 161 tests
+docker compose up test          # Run 169 tests
 docker compose up demo          # Baseline comparison
 docker compose up train         # Train (reads config/training.yaml)
 docker compose up train-export  # Train + export JSONL trajectories

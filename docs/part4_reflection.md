@@ -12,10 +12,10 @@ This gives us the speed of synthetic generation (~120K episodes/hour) with the p
 
 **2. The reward signal is the highest-risk component — that's what I targeted.**
 
-For coding agents, the reward is tractable (tests pass or fail). For distributed systems, "correct" is ambiguous, delayed, and context-dependent. If the reward signal doesn't work, no amount of environment fidelity matters. Three specific design decisions made it work:
+For coding agents, the reward is workable (tests pass or fail). For distributed systems, "correct" is ambiguous, delayed, and context-dependent. If the reward signal doesn't work, no amount of environment fidelity matters. Three specific design decisions made it work:
 
-- **Hierarchical partial credit** (0.0 → 0.4 → 0.7 → 1.0 by taxonomy depth) provides gradient signal for partially correct diagnoses, instead of binary right/wrong.
-- **Efficiency × diagnosis coupling** prevents the degenerate policy where the agent diagnoses immediately without investigating (fast + wrong = 0 efficiency).
+- **Hierarchical partial credit** (0.0 → 0.4 → 0.7 → 1.0 by taxonomy depth) provides learning signal for partially correct diagnoses, instead of binary right/wrong.
+- **Efficiency × diagnosis coupling** prevents the broken strategy where the agent diagnoses immediately without investigating (fast + wrong = 0 efficiency).
 - **Multi-label gold standard** with relevance weights handles incidents with multiple valid root causes (which the incident data shows is ~75% of real incidents).
 
 **3. Tool-based investigation, not flat text.**
@@ -34,34 +34,22 @@ The RL environment exposes the same tool interface as opensre's production pipel
 | **Scenario perturbation** | ±15% timing, ±20% magnitudes per seed | Same scenario, infinite variations |
 | **opensre integration** | SimulatedAction matching InvestigationAction interface | 5/5 actions pass through real execute_actions |
 | **Training loop** | EpisodeRunner with trajectory collection + JSONL/DPO export | Curriculum support via difficulty filtering |
-| **3 baseline agents** | Random, heuristic (no gold labels), oracle | Validates reward discrimination |
-| **161 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
+| **3 baseline agents** | Random, heuristic (no known correct answers), oracle | Validates reward discrimination |
+| **169 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
 
 ### Baseline Agent Results (Measured)
 
 | Agent | Avg Reward | Diagnosis | Efficiency | Remediation | Safety |
 |-------|-----------|-----------|------------|-------------|--------|
 | Random | 0.321 | 0.244 | 0.244 | 0.100 | 1.000 |
-| Heuristic (no gold labels) | 0.464 | 0.160 | 0.077 | 0.940 | 1.000 |
-| Oracle (gold labels) | 0.875 | 0.960 | 0.480 | 0.980 | 1.000 |
+| Heuristic (no known correct answers) | 0.464 | 0.160 | 0.077 | 0.940 | 1.000 |
+| Oracle (known correct answers) | 0.875 | 0.960 | 0.480 | 0.980 | 1.000 |
 
 Key observations:
 - **The reward discriminates clearly.** Oracle (0.875) >> heuristic (0.464) >> random (0.321). The 2.7× gap is learnable — there's room for an RL agent to improve.
 - **Diagnosis is the bottleneck.** The heuristic agent scores 0.160 on diagnosis (picks alphabetically first option) vs 0.960 for oracle. This is the skill that benefits most from training.
 - **Fast + wrong = low reward.** The random agent takes few steps but gets wrong answers. After the `efficiency × diagnosis` fix, its efficiency score dropped from 1.0 to 0.244 — the reward correctly penalises speed without accuracy.
-- **Safety is easy to satisfy.** All agents score 1.0. The safety penalties catch truly degenerate behaviour (diagnose on step 1), not normal investigation patterns.
-
-### Learning Agent Results
-
-A tabular Q-learning agent demonstrates the reward signal drives measurable improvement:
-
-```
-First 50 episodes avg:  0.420
-Last 50 episodes avg:   0.439
-Improvement:            +4.8%
-```
-
-The agent starts with random exploration (epsilon=1.0) and learns which actions lead to higher rewards for different observation patterns. This proves the environment and reward signal can train an agent — the core thesis of the project. Run `make learn` to reproduce.
+- **Safety is easy to satisfy.** All agents score 1.0. The safety penalties catch truly broken behaviour (diagnose on step 1), not normal investigation patterns.
 
 ### opensre End-to-End Integration (Verified)
 
@@ -133,17 +121,17 @@ These were only discovered by reading opensre's actual source code (`execute_act
 
 3. **LLM-as-judge for free-text diagnosis.** Replace exact taxonomy matching with semantic evaluation. The agent should be able to diagnose in natural language, not just pick from a fixed list.
 
-4. **AIOpsLab Layer 2 integration.** Deploy DeathStarBench via AIOpsLab, run the trained agent against real Prometheus/Jaeger/Filebeat telemetry, and measure the sim-to-real transfer gap. This is the existential risk validation.
+4. **AIOpsLab Layer 2 integration.** Deploy DeathStarBench via AIOpsLab, run the trained agent against real Prometheus/Jaeger/Filebeat telemetry, and measure the synthetic-to-real transfer gap. This is the biggest risk validation.
 
 5. **Compound failure scenarios.** Create scenarios with 2+ simultaneous failures (memory leak + traffic spike + DNS blip). These are the incidents that separate competent SRE agents from expert ones.
 
-6. **MLflow experiment tracking.** The training pipeline currently prints results to stdout. With multiple experiments (different reward weights, agent types, data sources), comparing runs becomes unwieldy. MLflow would add: experiment comparison dashboards, metric history across runs, model registry for trained checkpoints, artifact storage for trajectory JSONL files. Integration is straightforward — `mlflow.log_params()` + `mlflow.log_metrics()` in `run_training.py` — but adds a dependency and server process that isn't justified until there are 10+ experiments to compare.
+6. **MLflow experiment tracking.** The training pipeline currently prints results to stdout. With multiple experiments (different reward weights, agent types, data sources), comparing runs becomes unwieldy. MLflow would add: experiment comparison dashboards, metric history across runs, model registry for trained checkpoints, artifact storage for trajectory JSONL files. Integration is straightforward — `mlflow.log_params()` + `mlflow.log_metrics()` in `python -m app.main train` — but adds a dependency and server process that isn't justified until there are 10+ experiments to compare.
 
 ## Open Questions
 
 ### Biggest Unsolved Problems
 
-**1. Sim-to-real transfer.** The agent trains on synthetic telemetry with metric names like `cpu_percent` and `latency_p99_ms`. Real Grafana dashboards use `node_cpu_seconds_total` and `http_request_duration_seconds_bucket`. Real logs are 10x noisier with irrelevant entries. Will investigation skills trained on clean synthetic data transfer to messy production telemetry? This is the existential risk. The fastest validation would be: train on synthetic, evaluate on Aiops-Dataset's real log/metric/trace data, measure the performance gap.
+**1. Sim-to-real transfer.** The agent trains on synthetic telemetry with metric names like `cpu_percent` and `latency_p99_ms`. Real Grafana dashboards use `node_cpu_seconds_total` and `http_request_duration_seconds_bucket`. Real logs are 10x noisier with irrelevant entries. Will investigation skills trained on clean synthetic data transfer to messy production telemetry? This is the biggest risk. The fastest validation would be: train on synthetic, evaluate on Aiops-Dataset's real log/metric/trace data, measure the performance gap.
 
 **2. Reward for novel root causes.** The current reward requires gold-standard labels. But real incidents have novel root causes the scenario designer didn't anticipate. An agent that discovers a valid root cause not in the gold standard currently gets 0. Options: (a) LLM-as-judge to evaluate novel diagnoses semantically, (b) a "confidence calibration" reward where the agent is scored on how well its confidence matches its accuracy, (c) accept the limitation and rely on taxonomy coverage breadth to approximate.
 
@@ -163,7 +151,7 @@ These were only discovered by reading opensre's actual source code (`execute_act
 
 **Proof that LLM agents don't need RL.** If few-shot prompting with retrieval over a large enough incident knowledge base (e.g., 10K VOID incidents as context) achieves comparable investigation quality to RL-trained agents, the entire training environment becomes unnecessary. The investment should shift to building the retrieval system and the knowledge base.
 
-**Breakthrough in long-horizon credit assignment.** The current design uses end-of-episode sparse reward because intermediate rewards for SRE investigation are hard to define correctly. If credit assignment over 50+ step trajectories became reliable (e.g., through world models or hindsight experience replay), we could train on richer, longer investigation episodes with dense rewards at each step.
+**Breakthrough in long-horizon credit assignment.** The current design uses end-of-episode end-of-episode reward because intermediate rewards for SRE investigation are hard to define correctly. If credit assignment over 50+ step trajectories became reliable (e.g., through world models or hindsight experience replay), we could train on richer, longer investigation episodes with step-by-step rewards at each step.
 
 ### Questions I'd Ask Tracer
 

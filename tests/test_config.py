@@ -1,6 +1,6 @@
 """Tests for YAML config loading."""
 
-from src.config import (
+from app.config import (
     base_latency_ms,
     crawler_config,
     distractor_diagnoses,

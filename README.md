@@ -6,24 +6,21 @@ A training environment for AI SRE agents to learn incident investigation, diagno
 
 ```bash
 git clone <repo-url> && cd tracer-sre-rl
-make quickstart     # install + test + demo + learn — everything in one command
+make quickstart     # install + test + demo — everything in one command
 ```
 
-Or step by step: `make install` → `make test` → `make demo` → `make learn`
+Or step by step: `make install` → `make test` → `make check-reward`
 
 ## What You Can Do
 
 | Command | What it does | Time |
 |---------|-------------|------|
-| `make demo` | Compare 3 agents (random, heuristic, oracle) on 5 scenarios | 2s |
-| `make learn` | Train Q-learning agent — shows reward improving with live progress | 15s |
-| `make train` | Collect trajectories with EDA, accuracy matrix, and eval report | 10s |
-| `make export` | Export trajectories as JSONL for LLM fine-tuning | 10s |
-| `make finetune` | Fine-tune LLM on trajectories (dry run without GPU) | 2s |
-| `make validate` | Measure sim-to-real gap against Aiops-Dataset telemetry | 2s |
-| `make test` | Run 161 tests | 6s |
-| `make crawl` | Fetch latest incidents from public APIs | 30s |
-| `make train-all` | Crawl + train on everything | 40s |
+| `make check-reward` | Verify the reward function scores agents correctly | 2s |
+| `make train` | Run training episodes and show accuracy per failure type | 10s |
+| `make export` | Save training trajectories to a file for LLM fine-tuning | 10s |
+| `make finetune` | Run LLM fine-tuning on saved trajectories (preview without GPU) | 2s |
+| `make crawl` | Fetch real incidents from GCP, Cloudflare, and GitHub | 30s |
+| `make test` | Run all tests | 6s |
 | `make help` | Show all commands | instant |
 
 ## Configure Training
@@ -79,24 +76,6 @@ Accuracy by Taxonomy Label
   ...
 ```
 
-## Q-Learning Agent (make learn)
-
-```
-Training Q-learning agent on 5 scenarios, 200 episodes...
- Episode    Reward   Avg(50)   Epsilon  Progress
------------------------------------------------------------------
-      50     0.316     0.393     0.778  █████░░░░░░░░░░░░░░░ 25%
-     100     0.800     0.478     0.606  ██████████░░░░░░░░░░ 50%
-     150     0.495     0.405     0.471  ███████████████░░░░░ 75%
-     200     0.245     0.416     0.367  ████████████████████ 100%
-
-  First 50 episodes avg:  0.393
-  Last 50 episodes avg:   0.416
-  Improvement:            +6.0%
-
-  The agent learned. Reward improved over training.
-```
-
 ## opensre End-to-End (Verified)
 
 opensre's LLM investigated a simulated "Disk Full" scenario through the full LangGraph pipeline:
@@ -120,10 +99,8 @@ The LLM autonomously decided what to query, gathered synthetic evidence, and cor
 ## Full Learning Pipeline
 
 ```bash
-make learn          # 1. Prove the reward signal drives learning (Q-learning)
-make export         # 2. Export trajectories as JSONL
-make finetune       # 3. Fine-tune LLM (dry run, or real with GPU + trl)
-make validate       # 4. Measure sim-to-real fidelity gap
+make export         # 1. Export trajectories as JSONL
+make finetune       # 2. Fine-tune LLM (dry run, or real with GPU + trl)
 ```
 
 ## Train opensre
@@ -149,7 +126,7 @@ PYTHONPATH="../opensre:." python -m src.integration.opensre_runner --use-opensre
 
 ```
 Real incidents (Aiops-Dataset, GCP, Cloudflare, GitHub)
-  → ScenarioGenerator → topology + timeline + gold standard
+  → ScenarioGenerator → topology + timeline + correct answers
     → TelemetryGenerator → correlated metrics, logs, traces
       → SREEnvironment → agent investigates (7 tool-based actions)
         → RewardCalculator → diagnosis × efficiency + remediation + safety
@@ -181,16 +158,16 @@ See [docs/data_sources.md](docs/data_sources.md) for large datasets (LogHub, AIO
 ## Docker
 
 ```bash
-docker compose up demo          # Baseline comparison
-docker compose up test          # 161 tests
-docker compose up train         # Train (reads config/training.yaml)
-docker compose up train-export  # Train + export JSONL
-docker compose up crawl         # Fetch incidents
+docker compose run --rm check-reward   # Verify reward function
+docker compose run --rm test           # Run 169 tests
+docker compose run --rm train          # Run training episodes
+docker compose run --rm export         # Save trajectories
+docker compose run --rm crawl          # Fetch real incidents
 ```
 
 ## CI
 
-GitHub Actions on every PR to `main`: tests on Python 3.11 + 3.12, demo + training smoke tests.
+GitHub Actions on every PR to `main`: tests on Python 3.11 + 3.12, baseline + training smoke tests.
 
 ## Project Structure
 
@@ -205,21 +182,19 @@ tracer-sre-rl/
 ├── data/
 │   └── groundtruth-all.csv ← 241 Aiops-Dataset faults (in repo)
 ├── scenarios/              ← 5 hand-authored failure scenarios
-├── src/
-│   ├── crawler/            # Crawlers + scenario generator
-│   ├── generators/         # Synthetic telemetry (metrics, logs, traces)
-│   ├── environment/        # Gymnasium RL environment (7 actions)
-│   ├── evaluation/         # Reward (4 scorers)
-│   ├── integration/        # opensre bridge
-│   └── training/           # Episode runner, trajectory export, validation, metrics
-├── tests/                  # 161 tests
+├── app/
+│   ├── main.py             # Entry point: python -m app.main <command>
+│   ├── cli/                # CLI commands (train, check-reward, crawl, finetune)
+│   ├── models/             # Domain models (telemetry, scenario, agent, taxonomy)
+│   ├── incidents/          # Fetch and process real incidents
+│   ├── telemetry/          # Generate synthetic metrics, logs, traces
+│   ├── rl_env/             # Gymnasium RL environment (7 actions)
+│   ├── evaluation/         # Reward scoring (4 components)
+│   ├── integration/        # opensre bridge (SimulatedAction, AgentState)
+│   └── training/           # Episode runner, trajectory export, validation
+├── tests/                  # 169 tests
 ├── .github/workflows/      # CI
 ├── Makefile                # All commands
-├── demo.py                 # Baseline comparison
-├── run_training.py         # Training (EDA, progress, eval, accuracy matrix)
-├── run_learning.py         # Q-learning demo (live progress)
-├── run_finetune.py         # LLM fine-tuning (GRPO/DPO)
-├── run_crawler.py          # Incident crawler
 ├── Dockerfile
 └── docker-compose.yml
 ```
@@ -238,4 +213,4 @@ tracer-sre-rl/
 
 [1] bbyldebb, "Aiops-Dataset," 2022. https://github.com/bbyldebb/Aiops-Dataset
 
-Built with Claude Code. Python 3.11+. 161 tests. Deterministic per seed.
+Built with Claude Code. Python 3.11+. 169 tests. Deterministic per seed.

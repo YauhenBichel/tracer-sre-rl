@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.git/
+.github/
+.pytest_cache/
+.venv/
+*.db
+training_data/
+scenarios/generated/
+docs/
+*.md
+!requirements.txt

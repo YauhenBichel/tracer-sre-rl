@@ -1,7 +1,7 @@
 """Tests for the failure taxonomy."""
 
-from src.evaluation.scorers.diagnosis_scorer import DiagnosisScorer
-from src.taxonomy import build_default_taxonomy
+from app.evaluation.scorers.diagnosis_scorer import DiagnosisScorer
+from app.models.taxonomy import build_default_taxonomy
 
 
 def test_taxonomy_builds():

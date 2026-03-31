@@ -1,8 +1,8 @@
 services:
-  demo:
+  check-reward:
     build: .
-    container_name: sre-demo
-    command: python demo.py --quiet
+    container_name: sre-check-reward
+    command: python -m app.main check-reward --quiet
 
   test:
     build: .
@@ -13,23 +13,23 @@ services:
     build: .
     container_name: sre-training
     volumes:
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./training_data:/app/training_data
-    command: python run_training.py
+      - ./config:/project/config
+      - ./data:/project/data
+      - ./training_data:/project/training_data
+    command: python -m app.main train
 
-  train-export:
+  export:
     build: .
     container_name: sre-export
     volumes:
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./training_data:/app/training_data
-    command: python run_training.py --export training_data/trajectories.jsonl
+      - ./config:/project/config
+      - ./data:/project/data
+      - ./training_data:/project/training_data
+    command: python -m app.main export
 
   crawl:
     build: .
     container_name: sre-crawler
     volumes:
-      - ./data:/app/data
-    command: python run_crawler.py --db-path /app/data/incidents.db
+      - ./data:/project/data
+    command: python -m app.main crawl --db-path /project/data/incidents.db

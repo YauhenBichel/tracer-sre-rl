@@ -50,14 +50,12 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S", "ARG", "PLR0915", "PLR0911", "PLC0415", "SLF001", "T20"]
-"src/integration/opensre_runner.py" = ["ARG001", "PLC0415", "T20", "SLF001"]  # monkey-patching external lib
-"src/integration/**/*.py" = ["ARG001"]  # adapter stubs may have unused args
-"src/training/episode_runner.py" = ["PLC0415", "T20"]  # conditional imports, progress bar prints
-"run_*.py" = ["T20"]       # CLI entrypoints may use print
-"demo.py" = ["T20"]        # demo script uses print
-"scripts/**/*.py" = ["T20"]  # CLI scripts use print
-"src/training/metrics.py" = ["T20"]  # metrics display functions use print
-"src/training/sim_to_real.py" = ["T20", "PLC0415"]  # validation report prints, __main__ import
+"app/cli/**/*.py" = ["T20"]  # CLI scripts use print for user output
+"app/main.py" = ["T20", "PLC0415", "RUF005"]  # entry point: print, conditional imports, list concat
+"app/integration/opensre_runner.py" = ["ARG001", "PLC0415", "T20", "SLF001", "PLR0915"]
+"app/integration/**/*.py" = ["ARG001"]  # adapter stubs may have unused args
+"app/training/episode_runner.py" = ["PLC0415", "T20"]  # conditional imports, progress prints
+"app/training/metrics.py" = ["T20"]  # metrics display functions use print
 
 [tool.ruff.lint.pylint]
 max-branches = 12

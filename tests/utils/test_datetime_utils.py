@@ -1,6 +1,6 @@
 """Tests for DateTimeUtils."""
 
-from src.utils.datetime_utils import DateTimeUtils
+from app.utils.datetime_utils import DateTimeUtils
 
 
 def test_now_iso_returns_string():

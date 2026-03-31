@@ -27,8 +27,8 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short
 
-      - name: Run demo (smoke test)
-        run: python demo.py --quiet --agent oracle -s scenarios/disk_full.yaml
+      - name: Run reward check (smoke test)
+        run: python -m app.main check-reward --quiet --agent oracle -s scenarios/disk_full.yaml
 
       - name: Run training (smoke test)
-        run: python run_training.py --episodes 5
+        run: python -m app.main train --episodes 5
