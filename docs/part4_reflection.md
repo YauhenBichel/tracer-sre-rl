@@ -6,7 +6,7 @@
 
 **1. Real-data-driven synthetic telemetry — not pure synthetic, not pure real.**
 
-The central insight: RL training needs 100K+ episodes, but real infrastructure costs $5/episode (11 years and $500K for a training run). Pure synthetic telemetry is cheap but unrealistic. The solution: use real incident data from VOID (~10K incidents), Aiops-Dataset (labeled microservice faults), and public status pages to *drive* the synthetic generation. The scenarios come from real failures; only the rendering is synthetic.
+The central insight: RL training needs 100K+ episodes, but real infrastructure costs $5/episode (11 years and $500K for a training run). Pure synthetic telemetry is cheap but unrealistic. The solution: use real incident data from crawled incidents (~10K incidents), Aiops-Dataset (labeled microservice faults), and public status pages to *drive* the synthetic generation. The scenarios come from real failures; only the rendering is synthetic.
 
 This gives us the speed of synthetic generation (~120K episodes/hour) with the pattern diversity of real production incidents.
 
@@ -16,7 +16,7 @@ For coding agents, the reward is tractable (tests pass or fail). For distributed
 
 - **Hierarchical partial credit** (0.0 → 0.4 → 0.7 → 1.0 by taxonomy depth) provides gradient signal for partially correct diagnoses, instead of binary right/wrong.
 - **Efficiency × diagnosis coupling** prevents the degenerate policy where the agent diagnoses immediately without investigating (fast + wrong = 0 efficiency).
-- **Multi-label gold standard** with relevance weights handles incidents with multiple valid root causes (which the VOID database shows is ~75% of real incidents).
+- **Multi-label gold standard** with relevance weights handles incidents with multiple valid root causes (which the incident data shows is ~75% of real incidents).
 
 **3. Tool-based investigation, not flat text.**
 
@@ -127,7 +127,7 @@ These were only discovered by reading opensre's actual source code (`execute_act
 
 ### What I'd Build Next (One More Week)
 
-1. **Run the VOID crawler at scale and generate 500+ scenarios.** The pipeline exists (`IncidentReplaySource.load_from_db()` → `ScenarioGenerator`). Running it against the full VOID database would take the taxonomy coverage from 29% to an estimated 71%. This is the highest-leverage improvement — more diverse training data with zero code changes.
+1. **Expand data sources beyond 51% taxonomy coverage.** Add more crawlers (VOID when API available, more statuspage providers) and improve keyword classification patterns. The pipeline exists (`ScenarioGenerator.batch_generate()`) — more data = more scenarios with zero code changes.
 
 2. **Reward variance measurement.** Run 1,000 episodes per scenario with different seeds and measure reward variance. If `std/mean > 0.3`, the reward signal is too noisy for stable RL training. This is the most important validation missing.
 
