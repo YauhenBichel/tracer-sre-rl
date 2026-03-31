@@ -1,7 +1,7 @@
 """Tests for the LLM agent tool adapter."""
 
-from src.agent_adapter import TOOL_DEFINITIONS, SREToolAdapter
-from src.generators.loader import ScenarioLoader
+from app.incidents.scenario_loader import ScenarioLoader
+from app.integration.agent_adapter import TOOL_DEFINITIONS, SREToolAdapter
 
 
 def _load_scenario():

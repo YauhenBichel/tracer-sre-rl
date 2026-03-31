@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.models import (
+from app.models import (
     GeneratedTelemetry,
     MetricSample,
     ScenarioDefinition,

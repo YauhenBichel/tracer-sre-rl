@@ -6,9 +6,9 @@ Validates the complete flow:
 
 from __future__ import annotations
 
-from src.environment.actions import ActionType
-from src.environment.env import SREEnvironment
-from src.generators.loader import ScenarioLoader
+from app.incidents.scenario_loader import ScenarioLoader
+from app.rl_env.actions import ActionType
+from app.rl_env.env import SREEnvironment
 
 
 def test_full_episode_produces_nonzero_reward():

@@ -6,13 +6,13 @@
 
 The architecture has converged across SWE-bench [1], SWE-RL [2], DeepSWE [3], and Codex [4]. I studied these systems to understand which patterns transfer to SRE and which break.
 
-**Environment.** A Docker container with a repository snapshot at a specific commit, pre-installed with dependencies and tests. Each episode = one GitHub issue. The key property: the environment is fully deterministic — same code + same tests = same result, every time. This is what makes RL tractable for coding. For SRE, we don't have this: same deployment can fail or succeed depending on load and timing.
+**Environment.** A Docker container with a repository snapshot at a specific commit, pre-installed with dependencies and tests. Each episode = one GitHub issue. The key property: the environment is fully deterministic — same code + same tests = same result, every time. This is what makes RL workable for coding. For SRE, we don't have this: same deployment can fail or succeed depending on load and timing.
 
 **Observations.** Text-based: issue description, file contents, terminal output, conversation history. The agent reads and writes files, runs commands, and sees results. This is directly analogous to SRE investigation — the agent reads metrics dashboards, log queries, and trace visualisations. Our environment mirrors this by returning text observations from tool queries (metrics tables, log entries, trace summaries).
 
 **Actions.** Tool invocations: bash commands, file edits, searches, patch submission. The agent decides what to do, not what to output. This is the pattern we adopted — opensre's `plan_actions` node decides which tools to call (`query_grafana_metrics`, `query_grafana_logs`), and our simulated environment returns the results.
 
-**Reward.** Binary and sparse: tests pass (1) or fail (0), delivered at episode end. SWE-RL [2] introduced continuous reward via patch similarity to provide gradient signal for partial solutions. This is where SRE diverges most — there's no test suite to run. We address this with hierarchical partial credit (right category = 0.4, right subcategory = 0.7, exact match = 1.0) and multi-dimensional scoring (diagnosis, efficiency, remediation, safety).
+**Reward.** Binary and sparse: tests pass (1) or fail (0), delivered at episode end. SWE-RL [2] introduced continuous reward via patch similarity to provide learning signal for partial solutions. This is where SRE diverges most — there's no test suite to run. We address this with hierarchical partial credit (right category = 0.4, right subcategory = 0.7, exact match = 1.0) and multi-dimensional scoring (diagnosis, efficiency, remediation, safety).
 
 **Training loop.** Sample task → spin up environment → agent acts → collect trajectory → compute reward → update policy. DeepSWE [3] ran this across 4,500 tasks on 64 H100s for 6 days using GRPO. Our loop is the same structure but faster: synthetic telemetry at 38ms/episode vs Docker sandboxes at seconds/episode.
 
@@ -44,13 +44,13 @@ Every property above is violated in distributed production systems:
 
 | Property | Coding Agents | Distributed SRE |
 |----------|--------------|-----------------|
-| Determinism | Same input → same output | Race conditions, network timing, clock skew make outcomes non-deterministic |
+| Determinism | Same input → same output | Race conditions, network timing, clock skew make outcomes unpredictable |
 | Verification cost | CPU-seconds (run tests) | Minutes to hours (deploy, observe, wait for cascading effects) |
 | Automated oracles | Tests, compilers, linters | No equivalent — "is this system healthy?" requires judgment |
 | Feedback speed | Seconds | Minutes to days (cascading failures unfold over time) |
 | Data generation | Self-play on code repos | Requires expensive infrastructure simulation |
 
-The fundamental asymmetry: coding has cheap, fast, deterministic verification. Distributed systems have expensive, slow, non-deterministic verification. RL needs thousands of reward signals per training step. When each signal takes minutes instead of seconds and has 5–10% noise, the training loop becomes impractical without architectural innovation.
+The core problem: coding has cheap, fast, deterministic verification. Distributed systems have expensive, slow, unpredictable verification. RL needs thousands of reward signals per training step. When each signal takes minutes instead of seconds and has 5–10% noise, the training loop becomes impractical without architectural innovation.
 
 **Connection to open-sre-agent.** Tracer's open-sre-agent [9] already follows an agentic pattern structurally similar to SWE-bench agents — it has a tool-based action space (query Grafana, search Datadog, inspect EKS), a multi-step investigation loop (plan → investigate → diagnose, up to 5 iterations), and a claim-validation mechanism that could serve as a reward signal proxy. The gap is that there is no training loop — the agent relies entirely on pre-trained LLM capabilities plus prompt engineering. Building an RL environment that mirrors the open-sre-agent's tool interface would enable fine-tuning the investigation policy without changing the production architecture.
 
@@ -70,7 +70,7 @@ The fundamental asymmetry: coding has cheap, fast, deterministic verification. D
 
 **The constraint.** A coding agent sees a unified workspace — files, terminal output, test results, all in one place. An SRE agent must correlate signals scattered across dozens of services: Prometheus metrics, Grafana dashboards, application logs (structured and unstructured), distributed traces (Jaeger/Zipkin), Kubernetes events, cloud provider health status, deployment manifests, and alert histories [12]. No single view gives the full picture.
 
-**Why it changes RL design.** The observation space is heterogeneous — time-series metrics, log streams, trace graphs, Kubernetes events. The agent must learn to query the right sources; information retrieval itself is an action.
+**Why it changes RL design.** The observation space is mixed — time-series metrics, log streams, trace graphs, Kubernetes events. The agent must learn to query the right sources; information retrieval itself is an action.
 
 **Architectural implication.** The environment must expose a realistic tool interface (not a flat observation) — the agent queries metrics APIs, searches logs, inspects traces. This mirrors how a real SRE works with Grafana, Datadog, and kubectl, and aligns directly with open-sre-agent's tool-based architecture [9].
 
@@ -78,9 +78,9 @@ The fundamental asymmetry: coding has cheap, fast, deterministic verification. D
 
 **The constraint.** The same deployment can succeed or fail depending on current load, network conditions, JVM warmup state, connection pool saturation, and timing. Knight Capital's 2012 trading loss ($440M in 45 minutes) was triggered by a deployment that interacted with old code on one server — a sequence of events that would likely not reproduce under different timing [13]. A cascading failure triggered by a specific interleaving of events may not reproduce when replayed.
 
-**Why it changes RL design.** The reward signal becomes noisy — the agent cannot learn stable state-action values because the transition function is stochastic. You cannot simply "replay" a real incident; you must model the distribution of outcomes.
+**Why it changes RL design.** The reward signal becomes noisy — the agent cannot learn stable state-action values because the transition function is random. You cannot simply "replay" a real incident; you must model the distribution of outcomes.
 
-**Architectural implication.** The environment needs controlled stochasticity — parameterised noise injection for robust training, with fixed random seeds for reproducible evaluation. Scenario definitions must specify distributions, not point values (e.g., "latency increases by 50–200ms" not "latency increases by 100ms"). This is implemented in our MVP via the perturbation module, which jitters event timing (±15%) and effect magnitudes (±20%) per seed.
+**Architectural implication.** The environment needs controlled randomity — adding random variation for robust training, with fixed random seeds for reproducible evaluation. Scenario definitions must specify distributions, not point values (e.g., "latency increases by 50–200ms" not "latency increases by 100ms"). This is implemented in our MVP via the perturbation module, which jitters event timing (±15%) and effect magnitudes (±20%) per seed.
 
 ### 4. Ambiguous Correctness
 

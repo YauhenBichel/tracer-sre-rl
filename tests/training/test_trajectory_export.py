@@ -6,8 +6,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.training.episode_runner import EpisodeRunner
-from src.training.trajectory_export import export_jsonl, export_preference_pairs
+from app.training.episode_runner import EpisodeRunner
+from app.training.trajectory_export import export_jsonl, export_preference_pairs
 
 
 def test_export_jsonl_produces_valid_json():

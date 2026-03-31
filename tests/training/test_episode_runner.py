@@ -1,6 +1,6 @@
 """Tests for the episode runner / training loop."""
 
-from src.training.episode_runner import EpisodeRunner
+from app.training.episode_runner import EpisodeRunner
 
 
 def test_runner_initialises_with_scenarios():

@@ -28,7 +28,7 @@ TRAINING:       SREEnvironment (Gymnasium) ←→ opensre (LangGraph)
 
 **2. Classification.** Incidents are classified against the hierarchical taxonomy (35 leaf nodes across infrastructure, application, operational, external). Classification uses keyword pattern matching from `config/crawlers.yaml` and taxonomy label inheritance from the source data. Coverage gaps are tracked per taxonomy node.
 
-**3. Scenario Generation.** The `ScenarioGenerator` converts each classified incident into a playable scenario YAML: selects a service topology template (5 options by failure category), builds an event timeline (8 templates by failure type), sets gold-standard root causes and remediations. The `IncidentReplaySource` combines generated scenarios with 5 hand-authored builtin scenarios. Each scenario is perturbed per seed (±15% timing, ±20% magnitudes) for unlimited variation.
+**3. Scenario Generation.** The `ScenarioGenerator` converts each classified incident into a playable scenario YAML: selects a service topology template (5 options by failure category), builds an event timeline (8 templates by failure type), sets gold-standard root causes and remediations. The `ScenarioGenerator` combines generated scenarios with 5 hand-authored builtin scenarios. Each scenario is perturbed per seed (±15% timing, ±20% magnitudes) for unlimited variation.
 
 **4. Training.** The `EpisodeRunner` samples scenarios (weighted by difficulty for curriculum learning), runs episodes through the `SREEnvironment`, and collects full trajectories (observation, action, reward per step). Trajectories are exported as JSONL for LLM fine-tuning (GRPO) or as preference pairs for DPO. The open-sre-agent's LangGraph pipeline can run against the environment via `SimulatedAction` objects that replace real Grafana/Datadog tool calls.
 
@@ -298,7 +298,7 @@ R_diagnosis = max_i( similarity(d, gᵢ) × relevance(gᵢ) )
 
 This means diagnosing the traffic spike (relevance 0.7) still earns substantial credit even if the "primary" root cause is the connection pool. The agent is rewarded for identifying *any valid contributing factor*, weighted by how central it is.
 
-**Handling novel diagnoses.** When the agent produces a diagnosis not in the gold standard, the hierarchical taxonomy provides graceful degradation. An agent that diagnoses `infrastructure.database.replication_lag` for a connection pool issue gets 0.7 (correct subcategory `infrastructure.database`) rather than 0.0 (wrong answer). This gradient signal is critical for RL — it tells the agent "you're in the right area, keep looking."
+**Handling novel diagnoses.** When the agent produces a diagnosis not in the gold standard, the hierarchical taxonomy provides a useful fallback. An agent that diagnoses `infrastructure.database.replication_lag` for a connection pool issue gets 0.7 (correct subcategory `infrastructure.database`) rather than 0.0 (wrong answer). This learning signal is critical for RL — it tells the agent "you're in the right area, keep looking."
 
 ### Question 2: How Do You Score Partial Progress?
 
@@ -323,7 +323,7 @@ The depth scores (0.0 → 0.4 → 0.7 → 1.0) are configured in `config/reward.
 R_efficiency = R_raw_efficiency × R_diagnosis
 ```
 
-This prevents the degenerate policy where the agent diagnoses immediately (perfect efficiency, zero diagnosis accuracy). Being fast is only rewarded when the diagnosis is correct. The ideal step count of 5 (list alerts + 2 queries + diagnose + remediate) aligns with the safety scorer's requirement of ≥2 queries before diagnosis.
+This prevents the broken strategy where the agent diagnoses immediately (perfect efficiency, zero diagnosis accuracy). Being fast is only rewarded when the diagnosis is correct. The ideal step count of 5 (list alerts + 2 queries + diagnose + remediate) aligns with the safety scorer's requirement of ≥2 queries before diagnosis.
 
 ### Question 3: Temporal Credit Assignment
 
@@ -337,11 +337,11 @@ The key architectural decision: the telemetry generator pre-computes the *entire
 
 1. **Pre-generated timeline.** All telemetry (metrics, logs, traces) for the full episode duration is generated upfront. The agent queries `time_start=40, time_end=89` and sees the relevant window immediately — no waiting for real-time effects.
 
-2. **End-of-episode sparse reward.** The four-component reward is computed once when the agent has both diagnosed and proposed remediation. Sparse rewards are harder for RL to learn from than dense rewards, but they avoid the credit assignment errors that come with intermediate rewards in non-deterministic environments.
+2. **End-of-episode end-of-episode reward.** The four-component reward is computed once when the agent has both diagnosed and proposed remediation. Sparse rewards are harder for RL to learn from than step-by-step rewards, but they avoid the wrong reward attribution that come with intermediate rewards in unpredictable environments.
 
-3. **Truncation penalty.** If the agent runs out of steps before diagnosing, it receives a halved reward (`truncation_factor = 0.5`). If it diagnosed but didn't remediate, it receives `diagnosis_reward × 0.5`. This provides gradient signal even for incomplete episodes.
+3. **Truncation penalty.** If the agent runs out of steps before diagnosing, it receives a halved reward (`truncation_factor = 0.5`). If it diagnosed but didn't remediate, it receives `diagnosis_reward × 0.5`. This provides learning signal even for incomplete episodes.
 
-**Future extensions (not implemented):** potential-based reward shaping (Ng et al., 1999) for denser gradient signal, and counterfactual remediation scoring (simulate two futures with/without fix).
+**Future extensions (not implemented):** step-by-step rewards that guide the agent without changing the best strategy, and comparing "what happened" vs "what would have happened without the fix".
 
 ### Question 4: Human-in-the-Loop Evaluations
 
@@ -370,7 +370,7 @@ The reward function has been validated to discriminate between agent quality lev
 | Heuristic (no gold labels) | 0.464 | 0.160 | 0.077 | 0.940 | 1.000 |
 | Oracle (gold labels) | 0.875 | 0.960 | 0.480 | 0.980 | 1.000 |
 
-The 2.7× gap between oracle (0.875) and random (0.321) provides clear RL gradient signal. The heuristic agent's low diagnosis score (0.160) confirms that diagnosis accuracy is the primary bottleneck — the skill that benefits most from training.
+The 2.7× gap between oracle (0.875) and random (0.321) provides clear RL learning signal. The heuristic agent's low diagnosis score (0.160) confirms that diagnosis accuracy is the primary bottleneck — the skill that benefits most from training.
 
 ---
 
@@ -475,6 +475,6 @@ A custom LangGraph graph replaces opensre's `plan_actions` and `investigate` nod
 
 ## MVP Scope vs. Deferred
 
-**Built:** Telemetry generator, Gymnasium environment, 5 builtin + 241 Aiops-Dataset scenarios, 4-component reward, 3 baseline agents, crawlers, scenario generator, opensre integration (custom LangGraph), Q-learning agent, training loop with EDA/accuracy matrix/eval, trajectory export, sim-to-real validation, Docker, CI. 161 tests.
+**Built:** Telemetry generator, Gymnasium environment, 5 builtin + 241 Aiops-Dataset scenarios, 4-component reward, 3 baseline agents, crawlers, scenario generator, opensre integration (custom LangGraph), training loop with EDA/accuracy matrix/eval, trajectory export, Docker, CI.
 
 **Deferred:** Layer 2/3 real infrastructure, LLM-as-judge, milestone rewards, automatic curriculum, distributed training.
