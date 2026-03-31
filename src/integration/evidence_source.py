@@ -87,33 +87,35 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
     def _extract_empty(sources: dict) -> dict[str, Any]:
         return {}
 
+    # Action names MUST match opensre's EVIDENCE_MAPPERS keys in post_process.py
+    # so that summarize_execution_results correctly maps results into evidence.
     return [
         SimulatedAction(
-            name="get_alerts",
+            name="query_grafana_alert_rules",
             description="List all fired alerts with severity, service, and timestamp",
             inputs={},
-            outputs={"alerts": "Alert text with severity and timestamps"},
+            outputs={"rules": "Alert rules with severity and timestamps"},
             use_cases=["Initial incident triage", "Understanding alert scope"],
             requires=[],
             source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_empty,
-            function=lambda **_: _format_grafana_result(adapter.call_tool("list_alerts"), "alerts"),
+            function=lambda **_: _format_grafana_alerts(adapter.call_tool("list_alerts")),
         ),
         SimulatedAction(
-            name="get_service_topology",
-            description="Show service dependency graph",
+            name="query_grafana_service_names",
+            description="Show service dependency graph and service names",
             inputs={},
-            outputs={"topology": "Service names, types, and dependency relationships"},
+            outputs={"service_names": "Service names and topology"},
             use_cases=["Understanding service architecture", "Tracing dependency chains"],
             requires=[],
             source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_empty,
-            function=lambda **_: _format_grafana_result(adapter.call_tool("list_services"), "topology"),
+            function=lambda **_: _format_grafana_services(adapter.call_tool("list_services")),
         ),
         SimulatedAction(
-            name="get_metrics",
+            name="query_grafana_metrics",
             description="Query time-series metrics for a specific service over a time range",
             inputs={
                 "service_name": "Name of the service to query",
@@ -126,18 +128,17 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_service,
-            function=lambda service_name="", time_range_start=0, time_range_end=89, **_: _format_grafana_result(
+            function=lambda service_name="", time_range_start=0, time_range_end=89, **_: _format_grafana_metrics(
                 adapter.call_tool(
                     "query_metrics",
                     service=service_name,
                     time_start=int(time_range_start),
                     time_end=int(time_range_end),
                 ),
-                "metrics",
             ),
         ),
         SimulatedAction(
-            name="get_error_logs",
+            name="query_grafana_logs",
             description="Query structured logs for a specific service",
             inputs={
                 "service_name": "Name of the service to query",
@@ -147,64 +148,82 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
             outputs={"logs": "Log entries with timestamp, level, and message"},
             use_cases=["Finding error messages", "Correlating log events with metrics"],
             requires=[],
-            source="cloudwatch",
+            source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_service,
-            function=lambda service_name="", time_range_start=0, time_range_end=89, **_: _format_cloudwatch_result(
+            function=lambda service_name="", time_range_start=0, time_range_end=89, **_: _format_grafana_logs(
                 adapter.call_tool(
                     "query_logs", service=service_name, time_start=int(time_range_start), time_end=int(time_range_end)
                 ),
             ),
         ),
         SimulatedAction(
-            name="get_traces",
+            name="query_grafana_traces",
             description="Query distributed traces involving a specific service",
             inputs={"service_name": "Name of the service to query"},
             outputs={"traces": "Trace summaries with span counts and error status"},
             use_cases=["Tracing request flow", "Finding slow spans"],
             requires=[],
-            source="datadog",
+            source="grafana",
             availability_check=_sim_available,
             parameter_extractor=_extract_service_only,
-            function=lambda service_name="", **_: _format_datadog_result(
+            function=lambda service_name="", **_: _format_grafana_traces(
                 adapter.call_tool("query_traces", service=service_name),
             ),
         ),
     ]
 
 
-def _format_grafana_result(tool_result, data_key: str) -> dict[str, Any]:
-    """Format result to match opensre Grafana action output.
+# Format functions match opensre's EVIDENCE_MAPPERS expectations.
+# See: app/agent/nodes/investigate/processing/post_process.py
 
-    Real Grafana actions return: {source, available, logs/metrics/traces, ...}
-    See: app/agent/tools/tool_actions/grafana/grafana_actions.py
-    """
+
+def _format_grafana_alerts(tool_result) -> dict[str, Any]:
+    """Match _map_grafana_alert_rules: expects {rules: [...]}."""
     return {
-        "source": "grafana_simulated",
+        "source": "grafana_loki",
         "available": True,
-        data_key: tool_result.observation,
+        "rules": [{"name": "simulated_alert", "text": tool_result.observation}],
+    }
+
+
+def _format_grafana_services(tool_result) -> dict[str, Any]:
+    """Match _map_grafana_service_names: expects {service_names: [...]}."""
+    return {
+        "source": "grafana_loki",
+        "available": True,
+        "service_names": [tool_result.observation],
+    }
+
+
+def _format_grafana_metrics(tool_result) -> dict[str, Any]:
+    """Match _map_grafana_metrics: expects {metrics: [...]}."""
+    return {
+        "source": "grafana_loki",
+        "available": True,
+        "metrics": [{"name": "simulated", "data": tool_result.observation}],
+    }
+
+
+def _format_grafana_logs(tool_result) -> dict[str, Any]:
+    """Match _map_grafana_logs: expects {logs: [...], error_logs: [...]}."""
+    obs = tool_result.observation
+    return {
+        "source": "grafana_loki",
+        "available": True,
+        "logs": [obs],
+        "error_logs": [line for line in obs.split("\n") if "ERROR" in line],
+        "total_logs": 1,
         "service_name": "",
     }
 
 
-def _format_cloudwatch_result(tool_result) -> dict[str, Any]:
-    """Format result to match opensre CloudWatch action output."""
+def _format_grafana_traces(tool_result) -> dict[str, Any]:
+    """Match _map_grafana_traces: expects {traces: [...]}."""
     return {
-        "source": "cloudwatch_simulated",
+        "source": "grafana_loki",
         "available": True,
-        "logs": tool_result.observation,
-        "error_logs": tool_result.observation,
-        "total_logs": 1,
-    }
-
-
-def _format_datadog_result(tool_result) -> dict[str, Any]:
-    """Format result to match opensre Datadog action output."""
-    return {
-        "source": "datadog_simulated",
-        "available": True,
-        "traces": tool_result.observation,
-        "total": 1,
+        "traces": [{"summary": tool_result.observation}],
     }
 
 

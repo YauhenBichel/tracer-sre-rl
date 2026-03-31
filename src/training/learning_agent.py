@@ -94,8 +94,10 @@ class QLearningAgent:
         epsilon_start: float = 1.0,
         epsilon_end: float = 0.1,
         epsilon_decay: float = 0.995,
+        seed: int = 42,
     ):
         self.q_table: dict[tuple, np.ndarray] = defaultdict(lambda: np.zeros(len(ACTIONS)))
+        self._rng = random.Random(seed)
         self.lr = learning_rate
         self.discount = discount
         self.epsilon = epsilon_start
@@ -109,8 +111,8 @@ class QLearningAgent:
         state = _extract_state(obs, env)
 
         # Epsilon-greedy
-        if random.random() < self.epsilon:
-            action_idx = random.randint(0, len(ACTIONS) - 1)
+        if self._rng.random() < self.epsilon:
+            action_idx = self._rng.randint(0, len(ACTIONS) - 1)
         else:
             action_idx = int(np.argmax(self.q_table[state]))
 
@@ -132,8 +134,8 @@ class QLearningAgent:
             "target_service": target,
             "time_start": max_time // 2,
             "time_end": max_time,
-            "diagnosis_idx": random.randint(0, max(0, len(env.diagnosis_options) - 1)),
-            "remediation_idx": random.randint(0, max(0, len(env.remediation_options) - 1)),
+            "diagnosis_idx": self._rng.randint(0, max(0, len(env.diagnosis_options) - 1)),
+            "remediation_idx": self._rng.randint(0, max(0, len(env.remediation_options) - 1)),
         }
 
     def update(self, obs: dict, env: SREEnvironment, reward: float, done: bool) -> None:

@@ -504,52 +504,13 @@ GitHub post-mortems  ──┘    │                           │
 
 - **Difficulty estimation.** Derived from incident severity: critical → 0.6, major → 0.5, minor → 0.3.
 
-**Stage 3: Play in the RL environment.** The generated YAML is loaded by `ScenarioLoader`, perturbed per seed (±15% timing, ±20% magnitudes), and run through the `SREEnvironment`. The `IncidentReplaySource` handles the full pipeline:
-
-```python
-source = IncidentReplaySource()
-source.load_from_db("data/incidents.db")       # VOID + Aiops-Dataset
-source.load_builtin_scenarios()                 # 5 hand-authored
-scenarios = source.get_all()                    # sorted by difficulty
-
-runner = EpisodeRunner(scenarios=scenarios)
-results = runner.run_batch(10_000)
-```
+**Stage 3: Play in the RL environment.** The generated scenario is perturbed per seed (±15% timing, ±20% magnitudes) and run through the `SREEnvironment`.
 
 ### Question 2: Collecting a Corpus for 80% Coverage
 
-**Current state:** 10 of 35 taxonomy leaves covered (29%). Target: 28 of 35 (80%).
+**Current state:** 18 of 35 taxonomy leaves covered (51%) from builtins + Aiops-Dataset + crawled incidents.
 
-**The 25 uncovered leaves and how to reach them:**
-
-| Gap Category | Uncovered Leaves | Source to Fill |
-|---|---|---|
-| **Infrastructure compute** | `cpu_saturation`, `oom`, `instance_failure`, `container_crash` | Aiops-Dataset has labeled CPU/memory/pod faults. LitmusChaos has `pod-cpu-hog`, `pod-memory-hog`, `container-kill` experiments [LitmusChaos]. |
-| **Infrastructure database** | `replication_lag`, `lock_contention`, `split_brain` | VOID database incidents from companies running PostgreSQL, MySQL, MongoDB. Chaos engineering literature describes split-brain injection [Chaos Mesh]. |
-| **Infrastructure storage** | `iops_throttling`, `data_corruption` | Aiops-Dataset disk fault scenarios. AWS FIS provides EBS throttling injection. |
-| **Infrastructure network** | `partition`, `load_balancer`, `tls_certificate` | LitmusChaos has `pod-network-partition`, `pod-network-loss`. VOID contains TLS certificate expiry incidents (Let's Encrypt, Cloudflare). |
-| **Application** | `deadlock`, `thread_pool_exhaustion`, `cache_stampede`, `poison_pill`, `hotspot`, `api_breaking_change` | Aiops-Dataset has concurrency and dependency faults. VOID contains cache stampede incidents (Facebook Memcached, 2010). |
-| **Operational** | `bad_deploy`, `rollback_failure`, `feature_flag`, `quota_exhaustion`, `queue_backlog` | VOID is rich in deployment failures. GitHub post-mortems contain feature flag incidents (Knight Capital, GitHub). |
-| **External** | `cloud_provider`, `dns_provider`, `cdn` | GCP incident feed contains cloud provider outages. VOID has DNS provider incidents (Dyn, 2016). |
-
-**The plan (4 tiers):**
-
-1. **Tier 1: Automated from existing data (~15 leaves).** Run the crawler pipeline against VOID + Aiops-Dataset. The `ScenarioGenerator` auto-classifies incidents against the taxonomy and generates scenario YAMLs. Expected yield: ~15 new taxonomy leaves covered from the ~10K VOID incidents alone.
-
-2. **Tier 2: LitmusChaos mapping (~5 leaves).** Map LitmusChaos ChaosHub experiments [LitmusChaos] to taxonomy nodes. Each experiment (pod-cpu-hog, pod-network-loss, node-drain, etc.) defines a fault injection specification that maps directly to our event timeline format. 50+ experiments cover most infrastructure failure types.
-
-3. **Tier 3: LLM-assisted gap filling (~5 leaves).** For leaves with <5 real incidents (e.g., `split_brain`, `data_corruption`), prompt an LLM with: (a) the taxonomy node description, (b) 2-3 real incidents from adjacent nodes, (c) the scenario YAML schema. The LLM generates plausible scenario templates that a human SRE reviews before inclusion.
-
-4. **Tier 4: Community contribution (~remaining).** Publish the taxonomy and scenario format as open-source. Accept community-contributed scenarios — following the LitmusChaos ChaosHub model where practitioners contribute experiments from their own production experience.
-
-**Projected coverage:**
-
-| Stage | Leaves Covered | Coverage |
-|---|---|---|
-| MVP (hand-authored) | 10 / 35 | 29% |
-| + Tier 1 (VOID/Aiops auto-generation) | 25 / 35 | 71% |
-| + Tier 2 (LitmusChaos mapping) | 30 / 35 | 86% |
-| + Tier 3 (LLM gap-filling) | 33 / 35 | 94% |
+**Path to 80%:** Four tiers: (1) auto-generate from VOID/Aiops-Dataset, (2) map LitmusChaos ChaosHub experiments [LitmusChaos] to taxonomy nodes, (3) LLM-assisted gap-filling for rare failures (split_brain, data_corruption), (4) community-contributed scenarios.
 
 ### Question 3: Novel Scenarios for Generalisation
 
@@ -595,85 +556,16 @@ A high-frequency, low-coverage, low-agent-score node gets the highest priority. 
 
 ---
 
-## RL Loop Closure: How the opensre Agent Learns
+## RL Loop Closure
 
-### The Learning Flow
+The learning loop: (1) sample scenario from config, (2) opensre investigates via SimulatedActions, (3) RewardCalculator scores against gold standard, (4) trajectory saved as JSONL, (5) GRPO/DPO fine-tuning updates the LLM, (6) improved model deployed back to opensre.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    TRAINING ITERATION                            │
-│                                                                  │
-│  1. Sample scenario                                              │
-│     config/training.yaml → ScenarioGenerator → ScenarioDefinition│
-│     (Aiops-Dataset faults + builtin YAMLs + crawled incidents)   │
-│                                                                  │
-│  2. opensre investigates                                         │
-│     ┌──────────────┐     ┌──────────────────────────────────┐   │
-│     │ extract_alert │────▶│ plan_actions                     │   │
-│     └──────────────┘     │  LLM decides: query metrics?     │   │
-│                          │  query logs? which service?       │   │
-│                          └──────────┬───────────────────────┘   │
-│                                     ▼                            │
-│     ┌──────────────────────────────────────────────────────┐    │
-│     │ investigate                                           │    │
-│     │  SimulatedAction.function() → synthetic evidence      │    │
-│     │  (replaces real Grafana/Datadog during training)       │    │
-│     └──────────┬───────────────────────────────────────────┘    │
-│                ▼                                                 │
-│     ┌──────────────────┐                                        │
-│     │ diagnose          │  LLM analyzes evidence →              │
-│     │  root_cause       │  "infrastructure.database.             │
-│     │  remediation_steps│   connection_pool"                     │
-│     └──────────┬───────┘                                        │
-│                ▼                                                 │
-│  3. Score against gold standard                                  │
-│     RewardCalculator → R = 0.40·diag + 0.20·eff + 0.25·rem     │
-│                          + 0.15·safety                           │
-│                                                                  │
-│  4. Save trajectory                                              │
-│     (observations, LLM decisions, actions, reward) → JSONL       │
-│                                                                  │
-│  5. Update policy (offline, after batch)                         │
-│     trajectories.jsonl → GRPO/DPO fine-tuning on the LLM        │
-│     High-reward trajectories reinforced, low-reward suppressed   │
-│                                                                  │
-│  6. Deploy improved model back to opensre                        │
-│     Updated LLM → better plan_actions + diagnose decisions       │
-│                                                                  │
-│  Repeat: new scenario (perturbed) → investigate → score → save  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### What Improves Over Training
-
-The LLM in opensre makes two key decisions that RL improves:
-
-1. **`plan_actions` node** — which tools to call and in what order. A trained agent learns: "check the alerted service's metrics first, then its dependencies, then diagnose" vs a naive agent that queries random services.
-
-2. **`root_cause_diagnosis` node** — which root cause to propose given the evidence. A trained agent learns: "high active_connections + error_rate spike on the database = connection pool exhaustion" vs a naive agent that guesses.
-
-### How the Agent Generalises
-
-- **Perturbation**: Same scenario, different seed = different timing/magnitudes. The agent learns patterns, not specific numbers.
-- **Curriculum**: `config/training.yaml` controls `max_difficulty`. Start with easy (disk full, 3 services), progress to hard (cascading failure, 8 services).
-- **Coverage**: 241 Aiops-Dataset faults across 6 taxonomy leaves. Each has different service names, fault types, and evidence patterns.
-
-### Running the Learning Loop
+RL improves two opensre decisions: `plan_actions` (which tools to call) and `root_cause_diagnosis` (which root cause to propose). Generalisation comes from perturbation (different seed = different telemetry), curriculum (easy → hard), and scenario diversity (246 scenarios across 18 taxonomy leaves).
 
 ```bash
-# Step 1: Collect trajectories (standalone mode, no LLM needed)
-make train-real
-# or with opensre's LLM:
-PYTHONPATH="../opensre:." python -m src.integration.opensre_runner --use-opensre
-
-# Step 2: Export for fine-tuning
-make export  # → training_data/trajectories.jsonl
-
-# Step 3: Fine-tune (outside tracer-sre-rl, using trl/DeepSpeed)
-# python train_grpo.py --data training_data/trajectories.jsonl --model <base-model>
-
-# Step 4: Deploy improved model back to opensre
-# Update opensre's LLM config to point to the fine-tuned model
+make train          # collect trajectories
+make export         # → training_data/trajectories.jsonl
+make finetune       # GRPO fine-tuning (dry run without GPU)
 ```
 
 ---
