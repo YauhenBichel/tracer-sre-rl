@@ -3,6 +3,34 @@
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
+quickstart:  ## Install + test + demo + learn in one command
+	@echo "============================================================"
+	@echo "Step 1: Installing dependencies"
+	@echo "============================================================"
+	pip install -r requirements.txt -q
+	@echo ""
+	@echo "============================================================"
+	@echo "Step 2: Running tests"
+	@echo "============================================================"
+	python -m pytest tests/ -q
+	@echo ""
+	@echo "============================================================"
+	@echo "Step 3: Running baseline comparison"
+	@echo "============================================================"
+	python demo.py --quiet
+	@echo ""
+	@echo "============================================================"
+	@echo "Step 4: Training Q-learning agent (shows learning)"
+	@echo "============================================================"
+	python run_learning.py --episodes 200
+	@echo ""
+	@echo "============================================================"
+	@echo "Done! Next steps:"
+	@echo "  make train        # Train with EDA + accuracy matrix"
+	@echo "  make export       # Export trajectories for LLM fine-tuning"
+	@echo "  make help         # See all commands"
+	@echo "============================================================"
+
 install:  ## Install dependencies
 	pip install -r requirements.txt
 

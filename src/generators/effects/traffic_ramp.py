@@ -22,6 +22,7 @@ DEFAULT_TRAFFIC_MULTIPLIER = 2.0
 
 
 class TrafficRampEffect(EventEffectHandler):
+    """Applies traffic ramp effects to metrics during active events."""
     def apply(self, base_value, metric_name, service, event, progress):
         multiplier = event.params.get("multiplier", DEFAULT_TRAFFIC_MULTIPLIER)
         if metric_name in RATE_METRICS:

@@ -8,6 +8,7 @@ DEFAULT_DISK_FILL_TARGET_PERCENT = 98
 
 
 class DiskFillEffect(EventEffectHandler):
+    """Applies disk fill effects to metrics during active events."""
     def apply(self, base_value, metric_name, service, event, progress):
         if metric_name == METRIC_DISK_USAGE_PERCENT:
             return (

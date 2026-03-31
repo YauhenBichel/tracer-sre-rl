@@ -63,15 +63,31 @@ Improvement:            +4.8%
 
 The agent starts with random exploration (epsilon=1.0) and learns which actions lead to higher rewards for different observation patterns. This proves the environment and reward signal can train an agent — the core thesis of the project. Run `make learn` to reproduce.
 
-### opensre Trajectory Collection
+### opensre End-to-End Integration (Verified)
 
-The training pipeline exports episode trajectories as JSONL for LLM fine-tuning:
+opensre's LLM successfully investigated a simulated "Disk Full" scenario through the full LangGraph pipeline:
+
+```
+  ● Planning       Planned: ['query_grafana_alert_rules', 'query_grafana_metrics']
+  ● Gathering      grafana:1 alert rules, grafana:1 metric series
+  ● Diagnosing     confidence 62% — needs more evidence
+  ● Planning       Planned: ['query_grafana_service_names', 'query_grafana_logs']
+  ● Gathering      grafana:1 services, grafana:1 logs (13 errors)
+  ● Diagnosing     confidence 100% — found root cause
+
+  Root cause: "high disk usage on postgres-primary caused cascading failures"
+  Validity: 100%, Investigation loops: 3
+```
+
+The integration builds a custom LangGraph graph with simulated `plan_actions` and `investigate` nodes. opensre's LLM autonomously decided what to query, gathered synthetic evidence, and correctly identified the root cause. Action names match opensre's `EVIDENCE_MAPPERS` (`query_grafana_*`) so evidence flows correctly through the processing pipeline.
+
+### Trajectory Export
 
 ```bash
 make export  # → training_data/trajectories.jsonl
 ```
 
-Each line contains: initial alert (prompt), all observations, all tool calls, and the final reward. This is the input format for GRPO/DPO fine-tuning of opensre's LLM — the step that would make opensre's investigation decisions improve based on training data.
+Each line contains: initial alert (prompt), all observations, all tool calls, and the final reward — ready for GRPO/DPO fine-tuning.
 
 ### Key Metrics (Measured)
 

@@ -107,18 +107,18 @@ All thresholds are configurable in `config/reward.yaml`.
 
 **Why:** The assessment says "your architecture should plug into the Tracer open-sre-agent ecosystem." Without integration, the RL environment is a standalone prototype. With integration, it's a training system for the production agent.
 
-**How:** Three integration modules:
-- `SimulatedAction` — drop-in replacement for opensre's `InvestigationAction`. Has `parameter_extractor`, `availability_check`, and `function` matching the exact interface that `execute_actions()` expects. Verified against opensre's actual code.
-- `scenario_to_agent_state()` — creates an opensre `AgentState` from a scenario YAML, including all fields the pipeline reads (`investigation_started_at`, `alert_json`, `resolved_integrations` with endpoint/api_key structure).
-- `score_agent_state()` — maps opensre's free-text `root_cause` and `remediation_steps` back to taxonomy labels for reward computation.
+**How:** A custom LangGraph graph with simulated nodes that replace opensre's real `plan_actions` and `investigate` nodes. This is a proper integration, not monkey-patching:
+- `sim_plan_actions` — uses opensre's LLM for planning but our `SimulatedAction` registry instead of real Grafana/Datadog
+- `sim_investigate` — executes planned actions against our simulated environment, feeds evidence through opensre's `summarize_execution_results`
+- Action names match opensre's `EVIDENCE_MAPPERS` (`query_grafana_alert_rules`, `query_grafana_metrics`, `query_grafana_logs`, etc.) so evidence flows correctly through the processing pipeline
 
-Tested end-to-end: opensre's `execute_actions()` successfully runs all 5 simulated actions. 5/5 succeed.
+**Verified end-to-end:** opensre's LLM investigated a simulated "Disk Full" scenario, autonomously planned 4 tool calls across 3 investigation loops, gathered evidence from synthetic telemetry, and correctly diagnosed: *"high disk usage on postgres-primary caused cascading failures"* with 100% validity.
 
 **Key files:**
-- `src/integration/evidence_source.py` — `SimulatedAction` + `build_simulated_sources()`
-- `src/integration/state_adapter.py` — `AgentState` conversion + scoring
+- `src/integration/opensre_runner.py` — custom LangGraph graph builder + `run_with_opensre()`
+- `src/integration/evidence_source.py` — `SimulatedAction` matching `InvestigationAction` interface
+- `src/integration/state_adapter.py` — `AgentState` conversion + reward scoring
 - `src/agent_adapter.py` — `SREToolAdapter` for LLM function-calling APIs
-- `src/tool_definitions.py` — tool definitions for Claude tool_use / OpenAI functions
 
 ### Component 6: Training Loop
 

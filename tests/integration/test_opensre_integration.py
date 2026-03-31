@@ -105,11 +105,11 @@ def test_simulated_actions_cover_key_tools():
     adapter.reset()
     names = {a.name for a in create_simulated_actions(adapter)}
 
-    assert "get_alerts" in names
-    assert "get_service_topology" in names
-    assert "get_metrics" in names
-    assert "get_error_logs" in names
-    assert "get_traces" in names
+    assert "query_grafana_alert_rules" in names
+    assert "query_grafana_service_names" in names
+    assert "query_grafana_metrics" in names
+    assert "query_grafana_logs" in names
+    assert "query_grafana_traces" in names
 
 
 def test_simulated_sources_has_connection_verified():
@@ -216,9 +216,9 @@ def test_score_correct_diagnosis():
         "root_cause_category": gold_label.split(".")[0],
         "remediation_steps": [gold_remediation],
         "executed_hypotheses": [
-            {"action": "get_alerts", "service": "system"},
-            {"action": "get_metrics", "service": scenario.services[0].name},
-            {"action": "get_error_logs", "service": scenario.services[1].name},
+            {"action": "query_grafana_alert_rules", "service": "system"},
+            {"action": "query_grafana_metrics", "service": scenario.services[0].name},
+            {"action": "query_grafana_logs", "service": scenario.services[1].name},
         ],
     }
     result = score_agent_state(state, scenario)
@@ -232,7 +232,7 @@ def test_score_wrong_diagnosis():
         "root_cause": "completely wrong diagnosis about unicorns",
         "root_cause_category": "unknown",
         "remediation_steps": ["restart everything"],
-        "executed_hypotheses": [{"action": "get_alerts", "service": "system"}],
+        "executed_hypotheses": [{"action": "query_grafana_alert_rules", "service": "system"}],
     }
     result = score_agent_state(state, scenario)
 
@@ -271,7 +271,7 @@ def test_full_integration_flow():
     actions_by_name = {a.name: a for a in actions}
 
     # 3. Simulate execute_actions flow: check availability → extract params → call function
-    for action_name in ["get_alerts", "get_service_topology", "get_metrics", "get_error_logs"]:
+    for action_name in ["query_grafana_alert_rules", "query_grafana_service_names", "query_grafana_metrics", "query_grafana_logs"]:
         action = actions_by_name[action_name]
         assert action.availability_check(sources)
         kwargs = action.parameter_extractor(sources)
@@ -284,9 +284,9 @@ def test_full_integration_flow():
     state["root_cause_category"] = gold_label.split(".")[0]
     state["remediation_steps"] = [scenario.gold_remediations[0].action]
     state["executed_hypotheses"] = [
-        {"action": "get_alerts", "service": "system"},
-        {"action": "get_metrics", "service": adapter.service_names[0]},
-        {"action": "get_error_logs", "service": adapter.service_names[0]},
+        {"action": "query_grafana_alert_rules", "service": "system"},
+        {"action": "query_grafana_metrics", "service": adapter.service_names[0]},
+        {"action": "query_grafana_logs", "service": adapter.service_names[0]},
     ]
 
     result = score_agent_state(state, scenario)

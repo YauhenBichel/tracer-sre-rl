@@ -102,11 +102,11 @@ def scenario_to_agent_state(scenario: ScenarioDefinition, adapter: SREToolAdapte
         "plan_rationale": "",
         "available_sources": available_sources,
         "available_action_names": [
-            "get_alerts",
-            "get_service_topology",
-            "get_metrics",
-            "get_error_logs",
-            "get_traces",
+            "query_grafana_alert_rules",
+            "query_grafana_service_names",
+            "query_grafana_metrics",
+            "query_grafana_logs",
+            "query_grafana_traces",
         ],
         "resolved_integrations": resolved_integrations,
         # Evidence

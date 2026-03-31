@@ -6,9 +6,10 @@ A training environment for AI SRE agents to learn incident investigation, diagno
 
 ```bash
 git clone <repo-url> && cd tracer-sre-rl
-make install
-make demo
+make quickstart     # install + test + demo + learn — everything in one command
 ```
+
+Or step by step: `make install` → `make test` → `make demo` → `make learn`
 
 ## What You Can Do
 
@@ -77,6 +78,44 @@ Accuracy by Taxonomy Label
   application.memory.leak                  15    0.282   0.228   0.200
   ...
 ```
+
+## Q-Learning Agent (make learn)
+
+```
+Training Q-learning agent on 5 scenarios, 200 episodes...
+ Episode    Reward   Avg(50)   Epsilon  Progress
+-----------------------------------------------------------------
+      50     0.316     0.393     0.778  █████░░░░░░░░░░░░░░░ 25%
+     100     0.800     0.478     0.606  ██████████░░░░░░░░░░ 50%
+     150     0.495     0.405     0.471  ███████████████░░░░░ 75%
+     200     0.245     0.416     0.367  ████████████████████ 100%
+
+  First 50 episodes avg:  0.393
+  Last 50 episodes avg:   0.416
+  Improvement:            +6.0%
+
+  The agent learned. Reward improved over training.
+```
+
+## opensre End-to-End (Verified)
+
+opensre's LLM investigated a simulated "Disk Full" scenario through the full LangGraph pipeline:
+
+```
+  ● Planning  5.5s  Planned: ['query_grafana_alert_rules', 'query_grafana_metrics']
+  ● Gathering evidence  1ms  grafana:1 alert rules, grafana:1 metric series
+  ● Diagnosing  8.1s  confidence 62%          ← needs more evidence
+  ● Planning  5.3s  Planned: ['query_grafana_service_names', 'query_grafana_logs']
+  ● Gathering evidence  1ms  grafana:1 services, grafana:1 logs (13 errors)
+  ● Diagnosing  13.2s  confidence 100%        ← found the root cause
+
+  Root cause: "high disk usage on postgres-primary caused cascading failures"
+  Category: resource_exhaustion
+  Validity: 100%
+  Investigation loops: 3
+```
+
+The LLM autonomously decided what to query, gathered synthetic evidence, and correctly identified the root cause — all through opensre's production LangGraph pipeline with simulated evidence sources.
 
 ## Full Learning Pipeline
 

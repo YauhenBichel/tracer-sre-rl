@@ -9,6 +9,7 @@ ERROR_RATE_FLOOR = 0.1
 
 
 class CascadeEffect(EventEffectHandler):
+    """Applies cascade effects to metrics during active events."""
     def apply(self, base_value, metric_name, service, event, progress):
         if METRIC_LATENCY in metric_name:
             return base_value * (1.0 + LATENCY_MULTIPLIER * progress)
