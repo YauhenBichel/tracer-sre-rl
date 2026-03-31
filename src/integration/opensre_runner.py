@@ -216,7 +216,7 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
 
         tracker.complete("investigate", fields_updated=["evidence"], message=summary)
         output = InvestigateOutput(evidence=evidence, executed_hypotheses=executed_hyps)
-        return output.to_dict()
+        return output.to_dict()  # type: ignore[no-any-return]
 
     # --- Build custom graph ---
 
@@ -225,8 +225,8 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
         graph.add_node("inject_auth", inject_auth_node)
         graph.add_node("extract_alert", node_extract_alert)
         graph.add_node("resolve_integrations", node_resolve_integrations)
-        graph.add_node("plan_actions", sim_plan_actions)  # OUR node
-        graph.add_node("investigate", sim_investigate)  # OUR node
+        graph.add_node("plan_actions", sim_plan_actions)  # type: ignore[type-var]
+        graph.add_node("investigate", sim_investigate)  # type: ignore[type-var]
         graph.add_node("diagnose", node_diagnose_root_cause)
         graph.add_node("publish", node_publish_findings)
 
@@ -246,7 +246,7 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
         compiled = graph.compile()
 
         logger.info("Running custom opensre graph for: %s", scenario.name)
-        final_state = compiled.invoke(state)
+        final_state = compiled.invoke(state)  # type: ignore[call-overload]
 
         result = score_agent_state(final_state, scenario)
         return {
