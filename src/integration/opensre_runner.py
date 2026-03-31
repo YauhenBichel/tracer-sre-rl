@@ -43,7 +43,9 @@ def _execute_simulated_actions(
             result = action.function(**kwargs)
             if isinstance(result, dict) and result.get("available"):
                 evidence[action.name] = result
-                executed.append({"action": action.name, "service": result.get("service_name", "unknown"), "success": True})
+                executed.append(
+                    {"action": action.name, "service": result.get("service_name", "unknown"), "success": True}
+                )
         except Exception as e:
             logger.warning("Action %s failed: %s", action.name, e)
 
@@ -74,15 +76,13 @@ def run_standalone(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, An
     }
 
 
-def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, Any]:
+def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, Any]:  # noqa: PLR0915
     """Build a custom LangGraph graph with simulated evidence sources.
 
     Replaces opensre's investigate and plan_actions nodes with versions
     that use our simulated actions. No monkey-patching — a clean graph.
     """
     try:
-        from langgraph.graph import END, StateGraph
-        from app.agent.state import AgentState
         from app.agent.nodes import (
             node_diagnose_root_cause,
             node_extract_alert,
@@ -90,21 +90,22 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
             node_resolve_integrations,
         )
         from app.agent.nodes.auth import inject_auth_node
-        from app.agent.nodes.investigate.models import InvestigateInput, InvestigateOutput
         from app.agent.nodes.investigate.execution import execute_actions
+        from app.agent.nodes.investigate.models import InvestigateInput, InvestigateOutput
         from app.agent.nodes.investigate.processing import summarize_execution_results
-        from app.agent.nodes.plan_actions.build_prompt import select_actions, plan_actions_with_llm
+        from app.agent.nodes.plan_actions.build_prompt import plan_actions_with_llm, select_actions
         from app.agent.nodes.plan_actions.detect_sources import detect_sources
-        from app.agent.nodes.plan_actions.extract_keywords import extract_keywords
         from app.agent.nodes.plan_actions.node import InvestigationPlan
-        from app.agent.tools.clients import get_llm
+        from app.agent.output import get_tracker
         from app.agent.routing import (
             route_after_extract,
             route_by_mode,
             route_investigation_loop,
         )
+        from app.agent.state import AgentState
+        from app.agent.tools.clients import get_llm
         from app.agent.tools.tool_actions.investigation_registry.models import InvestigationAction
-        from app.agent.output import get_tracker
+        from langgraph.graph import END, StateGraph
     except ImportError as e:
         logger.error("opensre not installed: %s", e)
         return {"error": f"opensre not installed: {e}"}
@@ -120,9 +121,14 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
     # Build real InvestigationAction objects from our SimulatedActions
     real_actions = [
         InvestigationAction(
-            name=sa.name, description=sa.description, inputs=sa.inputs,
-            outputs=sa.outputs, use_cases=sa.use_cases, requires=sa.requires,
-            source=sa.source, function=sa.function,
+            name=sa.name,
+            description=sa.description,
+            inputs=sa.inputs,
+            outputs=sa.outputs,
+            use_cases=sa.use_cases,
+            requires=sa.requires,
+            source=sa.source,
+            function=sa.function,
             availability_check=sa.availability_check,
             parameter_extractor=sa.parameter_extractor,
         )
@@ -139,13 +145,13 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
 
         # Detect sources + inject simulated
         sources = detect_sources(
-            input_data.raw_alert, input_data.context,
+            input_data.raw_alert,
+            input_data.context,
             resolved_integrations=state.get("resolved_integrations"),
         )
         sources.update(sim_sources)
 
         # Select from our simulated actions
-        keywords = extract_keywords(input_data.problem_md, input_data.alert_name)
         available, names = select_actions(
             actions=real_actions,
             available_sources=sources,
@@ -154,15 +160,22 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
 
         if not names:
             tracker.complete("plan_actions", fields_updated=["planned_actions"], message="No actions available")
-            return {"planned_actions": [], "plan_rationale": "", "available_sources": sources, "available_action_names": []}
+            return {
+                "planned_actions": [],
+                "plan_rationale": "",
+                "available_sources": sources,
+                "available_action_names": [],
+            }
 
         llm = get_llm()
         plan = plan_actions_with_llm(
-            llm=llm, plan_model=InvestigationPlan,
+            llm=llm,
+            plan_model=InvestigationPlan,
             problem_md=input_data.problem_md,
             executed_hypotheses=input_data.executed_hypotheses,
             available_actions=available,
-            available_sources=sources, memory_context="",
+            available_sources=sources,
+            memory_context="",
         )
 
         planned = plan.actions if plan else []
@@ -212,18 +225,22 @@ def run_with_opensre(scenario: ScenarioDefinition, seed: int = 42) -> dict[str, 
         graph.add_node("inject_auth", inject_auth_node)
         graph.add_node("extract_alert", node_extract_alert)
         graph.add_node("resolve_integrations", node_resolve_integrations)
-        graph.add_node("plan_actions", sim_plan_actions)      # OUR node
-        graph.add_node("investigate", sim_investigate)          # OUR node
+        graph.add_node("plan_actions", sim_plan_actions)  # OUR node
+        graph.add_node("investigate", sim_investigate)  # OUR node
         graph.add_node("diagnose", node_diagnose_root_cause)
         graph.add_node("publish", node_publish_findings)
 
         graph.set_entry_point("inject_auth")
         graph.add_conditional_edges("inject_auth", route_by_mode, {"chat": END, "investigation": "extract_alert"})
-        graph.add_conditional_edges("extract_alert", route_after_extract, {"end": END, "investigate": "resolve_integrations"})
+        graph.add_conditional_edges(
+            "extract_alert", route_after_extract, {"end": END, "investigate": "resolve_integrations"}
+        )
         graph.add_edge("resolve_integrations", "plan_actions")
         graph.add_edge("plan_actions", "investigate")
         graph.add_edge("investigate", "diagnose")
-        graph.add_conditional_edges("diagnose", route_investigation_loop, {"investigate": "plan_actions", "publish": "publish"})
+        graph.add_conditional_edges(
+            "diagnose", route_investigation_loop, {"investigate": "plan_actions", "publish": "publish"}
+        )
         graph.add_edge("publish", END)
 
         compiled = graph.compile()
@@ -252,8 +269,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run opensre against RL environment")
     parser.add_argument("--scenario", "-s", help="Scenario YAML path")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--use-opensre", action="store_true",
-                        help="Use opensre's LangGraph pipeline (requires opensre + LLM)")
+    parser.add_argument(
+        "--use-opensre", action="store_true", help="Use opensre's LangGraph pipeline (requires opensre + LLM)"
+    )
     args = parser.parse_args()
 
     loader = ScenarioLoader()
@@ -266,9 +284,9 @@ def main() -> None:
     run_fn = run_with_opensre if args.use_opensre else run_standalone
 
     for scenario in scenarios:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Scenario: {scenario.name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         try:
             result = run_fn(scenario, seed=args.seed)

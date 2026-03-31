@@ -38,7 +38,7 @@ Hand-authored, covering 5 failure classes: connection pool exhaustion, memory le
 241 labeled fault scenarios from a real 46-instance microservice e-commerce system [1]. Fault types: Node CPU Failure, Kubernetes Container Memory Load, Network Latency, Disk Space Consumption, Process Termination, I/O Load, and more. Already in the repo.
 
 ```bash
-python run_training.py --episodes 1000 --aiops-groundtruth data/groundtruth-all.csv
+python run_training.py --episodes 1000
 ```
 
 This produces **246 total scenarios** (241 generated + 5 builtins) covering 14 taxonomy leaves.

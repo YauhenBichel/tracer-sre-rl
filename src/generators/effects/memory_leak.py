@@ -11,6 +11,7 @@ DEFAULT_LEAK_DURATION_SECONDS = 300
 
 class MemoryLeakEffect(EventEffectHandler):
     """Applies memory leak effects to metrics during active events."""
+
     def apply(self, base_value, metric_name, service, event, progress):
         if metric_name == METRIC_MEMORY_PERCENT:
             rate = event.params.get("rate_per_minute", DEFAULT_LEAK_RATE_PER_MINUTE)

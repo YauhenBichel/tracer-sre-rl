@@ -7,79 +7,17 @@ A scalable system that continuously generates high-fidelity failure scenarios fo
 ## System Architecture Overview
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          DATA PLANE                                      │
-│                                                                          │
-│  ┌────────────────────┐   ┌──────────────────┐   ┌───────────────────┐  │
-│  │  Incident Crawlers │   │ Failure Taxonomy  │   │ Scenario          │  │
-│  │                    │──▶│ & Classifier      │──▶│ Generator         │  │
-│  │  - VOID  (~10K)    │   │                   │   │                   │  │
-│  │  - Aiops-Dataset   │   │  - 35 leaf nodes  │   │  - Topology       │  │
-│  │  - GCP incidents   │   │  - Rule + keyword │   │    templates (5)  │  │
-│  │  - Cloudflare      │   │    classification │   │  - Event timeline │  │
-│  │  - GitHub PMs      │   │  - Coverage       │   │    templates (8)  │  │
-│  │                    │   │    gap tracking    │   │  - Gold standard  │  │
-│  └────────────────────┘   └──────────────────┘   └────────┬──────────┘  │
-│                                                            │             │
-│          SQLite DB                                         │             │
-│          (normalised incidents)                            ▼             │
-│                                                  ┌────────────────────┐ │
-│                                                  │ IncidentReplay     │ │
-│                                                  │ Source             │ │
-│                                                  │  + 5 builtin YAML │ │
-│                                                  │  + N generated    │ │
-│                                                  └────────┬──────────┘ │
-└───────────────────────────────────────────────────────────┼────────────┘
-                                                            │
-┌───────────────────────────────────────────────────────────┼────────────┐
-│                       SIMULATION PLANE                    │            │
-│                                                           ▼            │
-│  ┌───────────────────────────────────┐   ┌─────────────────────────┐  │
-│  │ Layer 1: Real-Data-Driven         │   │ Layer 2: AIOpsLab       │  │
-│  │ Synthetic Telemetry               │   │ (MLSys'25)              │  │
-│  │                                   │   │                         │  │
-│  │  Scenario + seed                  │   │  DeathStarBench         │  │
-│  │    → perturbation (±15%/±20%)     │   │  microservices          │  │
-│  │    → MetricsGenerator (effects)   │   │    + fault injection    │  │
-│  │    → LogGenerator (event-aware)   │   │    + Jaeger traces      │  │
-│  │    → TraceGenerator (correlated)  │   │    + Prometheus metrics  │  │
-│  │                                   │   │    + Filebeat logs      │  │
-│  │  ~1,000 eps/hr · $0.001/ep        │   │  ~10 eps/hr · $0.10/ep  │  │
-│  └──────────────┬────────────────────┘   └─────────────────────────┘  │
-│                 │                                                      │
-└─────────────────┼──────────────────────────────────────────────────────┘
-                  │
-┌─────────────────┼──────────────────────────────────────────────────────┐
-│                 │          TRAINING PLANE                               │
-│                 ▼                                                       │
-│  ┌────────────────────┐    ┌─────────────────────┐                     │
-│  │ SREEnvironment     │    │ open-sre-agent      │                     │
-│  │ (Gymnasium API)    │◄──▶│ (LangGraph pipeline)│                     │
-│  │                    │    │                     │                     │
-│  │  obs: text telemetry│    │  extract_alert      │                     │
-│  │  act: tool calls   │    │  → plan_actions     │                     │
-│  │  7 actions         │    │  → investigate      │                     │
-│  └────────┬───────────┘    │  → diagnose         │                     │
-│           │                │  → publish           │                     │
-│           │                └─────────────────────┘                     │
-│           ▼                                                            │
-│  ┌────────────────────┐    ┌─────────────────────┐                     │
-│  │ Reward Engine      │    │ Training Loop       │                     │
-│  │                    │───▶│ (EpisodeRunner)     │                     │
-│  │  R = 0.40·diag     │    │                     │                     │
-│  │    + 0.20·eff      │    │  - Trajectory       │                     │
-│  │    + 0.25·rem      │    │    collection       │                     │
-│  │    + 0.15·safety   │    │  - JSONL/DPO export │                     │
-│  └────────────────────┘    │  - Curriculum        │                     │
-│                            │  - Coverage tracking │                     │
-│                            └─────────────────────┘                     │
-│                                                                        │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     FEEDBACK LOOP                                │   │
-│  │  Episode → Reward → Trajectory export → Policy update (GRPO) → │   │
-│  │  Coverage gap → Gap-filling priority → New scenarios → Repeat   │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┘
+DATA PLANE:     Crawlers (GCP, Cloudflare, GitHub, Aiops-Dataset)
+                  → Taxonomy classifier (35 leaf nodes)
+                    → ScenarioGenerator (topology + timeline + gold standard)
+
+SIMULATION:     Layer 1: Synthetic telemetry (1,000 eps/hr, $0.001/ep)
+                Layer 2: AIOpsLab real microservices (10 eps/hr, $0.10/ep)
+
+TRAINING:       SREEnvironment (Gymnasium) ←→ opensre (LangGraph)
+                  → RewardCalculator (diagnosis × efficiency + remediation + safety)
+                    → Trajectory export (JSONL) → GRPO/DPO fine-tuning
+                      → Coverage gap → new scenarios → repeat
 ```
 
 ## Data Flow
@@ -224,33 +162,19 @@ Root
     └── CDN / Edge (cache invalidation, origin overload)
 ```
 
-### Classification Pipeline
+### Classification Pipeline (Implemented)
 
-1. **Rule-based pre-filter**: Pattern matching on keywords (e.g., "OOM" → Infrastructure.Compute.OOM, "connection pool" → Infrastructure.Database.Connection_Pool_Exhaustion).
-2. **LLM classifier**: For incidents that don't match rules, use an LLM with the full taxonomy as context to classify. Prompt includes the incident summary, timeline, and root cause, and asks the model to select taxonomy paths and confidence scores.
-3. **Multi-label**: Incidents can have multiple taxonomy labels (e.g., a deployment that triggers a cascading failure → Operational.Deployment.Bad_Deploy + Application.Dependency.Cascading_Failure).
-
-### Coverage Gap Detection
-
-Maintain a **coverage matrix**: for each taxonomy leaf node, track (a) number of indexed incidents, (b) number of generated scenarios, (c) agent performance score. Nodes with low incident count or low agent performance are flagged for targeted crawling or synthetic scenario generation.
+Keyword pattern matching from `config/crawlers.yaml` (25 patterns mapping to taxonomy labels). Multi-label supported — incidents can have multiple taxonomy labels. Coverage tracked via `EpisodeRunner.stats.rewards_by_scenario` per taxonomy node.
 
 ---
 
 ## Pillar 3: Simulation of Distributed Infrastructure
 
-### Position: Real-Data-Driven Synthetic Telemetry + Validation
+### Position: Hybrid — Real Data Drives Synthetic Generation
 
-**Explicit position:** Hybrid multi-layer, with Layer 1 (real-data-driven synthetic telemetry) as the workhorse and Layer 2 (AIOpsLab [AIOpsLab]) for transfer validation.
+**Explicit position:** Real-data-driven synthetic telemetry (Layer 1) for bulk training, AIOpsLab [AIOpsLab] (Layer 2) for transfer validation.
 
-This is *not* pure synthetic generation — the scenarios, failure patterns, and telemetry characteristics are derived from real incident databases (VOID [VOID], Aiops-Dataset [Aiops-Dataset], LogHub [LogHub]). What is synthetic is the *rendering* — we generate metrics, logs, and traces programmatically rather than running real infrastructure, because RL training requires thousands of episodes per hour.
-
-### Why Not Pure End-to-End Testing?
-
-End-to-end testing (deploy services, inject faults, observe) is the gold standard for fidelity. But RL training requires 100,000+ episodes. At $5/episode and 1 episode/hour (the realistic cost of a Kubernetes chaos experiment), a single training run would take 11 years and cost $500,000. The economics force a layered approach.
-
-### Why Not Pure Synthetic Generation?
-
-Pure synthetic generation (hand-tuned baselines, made-up log templates) produces telemetry that doesn't match real production systems. An agent trained on synthetic-only data may fail when confronted with real Grafana dashboards because the noise profiles, metric names, and log formats differ. The solution: **calibrate synthetic generation against real data**.
+Why not pure end-to-end? 100K episodes at $5/episode = $500K and 11 years. Why not pure synthetic? Hand-tuned baselines don't match real Grafana dashboards — the agent won't transfer. The hybrid: real incident data (Aiops-Dataset [Aiops-Dataset], VOID [VOID]) drives scenario generation; synthetic rendering produces the telemetry at 38ms/episode.
 
 ### The Architecture
 
@@ -417,31 +341,11 @@ The key architectural decision: the telemetry generator pre-computes the *entire
 
 3. **Truncation penalty.** If the agent runs out of steps before diagnosing, it receives a halved reward (`truncation_factor = 0.5`). If it diagnosed but didn't remediate, it receives `diagnosis_reward × 0.5`. This provides gradient signal even for incomplete episodes.
 
-**Designed for future implementation:**
-
-4. **Potential-based reward shaping.** Following Ng et al. (1999), define a potential function Φ(s) over investigation states. Award shaped reward `F(s, s') = γΦ(s') - Φ(s)` at each step. Example: Φ increases when the agent queries a service mentioned in an alert (signal that investigation is on track). This preserves the optimal policy while providing denser gradient signal. The first candidate: `Φ = number_of_services_queried / total_services × 0.1`.
-
-5. **Counterfactual remediation scoring.** After the agent proposes a fix, simulate two futures — with and without the remediation — and reward the *difference* in system health metrics. This isolates the agent's causal contribution from background noise. Requires extending the telemetry generator with post-remediation timeline branching.
+**Future extensions (not implemented):** potential-based reward shaping (Ng et al., 1999) for denser gradient signal, and counterfactual remediation scoring (simulate two futures with/without fix).
 
 ### Question 4: Human-in-the-Loop Evaluations
 
-**Where humans are needed:**
-
-1. **Novel root causes.** When the agent produces a diagnosis that doesn't match any gold-standard label, it could be wrong — or it could be a valid alternative the scenario designer didn't anticipate. Only a human SRE can distinguish. Example: diagnosing "application.concurrency.thread_pool_exhaustion" for a scenario labeled "infrastructure.database.connection_pool" — this might be the upstream symptom, not the root cause, but it's arguable.
-
-2. **Taxonomy expansion.** When crawled incidents from VOID [VOID] don't fit existing taxonomy categories, a human must decide whether to create a new category or reclassify under an existing one.
-
-3. **Reward calibration.** Periodically compare the automated reward scores against human expert judgments to detect drift. Does a score of 0.7 (correct subcategory) feel right to an experienced SRE, or should it be higher/lower?
-
-**How to minimise cost (active learning):**
-
-The cost of human evaluation scales with the number of episodes reviewed. To minimise it:
-
-1. **LLM-as-judge for routine scoring.** Use an LLM to evaluate free-text diagnoses against gold-standard labels semantically. "The database ran out of connections" should match `infrastructure.database.connection_pool` even without the exact label. This handles ~90% of episodes without human intervention.
-
-2. **Active learning for the remaining 10%.** Only request human review when the LLM-as-judge confidence is low — measured by disagreement between multiple judge prompts or when the similarity score falls in the ambiguous range (0.3–0.6). This focuses human attention on genuinely uncertain cases.
-
-3. **Batch evaluation with feedback loops.** Collect uncertain episodes during a training run, present them in batches to human reviewers (5-10 episodes at a time), and use the feedback to update gold-standard labels and taxonomy rules. Each human review improves future automated scoring.
+Humans are needed for: novel root causes not in taxonomy, taxonomy expansion, and reward calibration. To minimise cost: LLM-as-judge handles ~90% of scoring; active learning requests human review only for uncertain cases (disagreement between judge prompts). Estimated cost: ~$4K for a 100K-episode run.
 
 **Estimated cost:** At an active learning rate of 10% and a batch review rate of 50 episodes/hour, a 100K-episode training run requires ~2,000 human-reviewed episodes = ~40 hours of expert time. At $100/hour for an SRE consultant, that's $4,000 — a small fraction of the total training cost.
 
@@ -472,24 +376,17 @@ The 2.7× gap between oracle (0.875) and random (0.321) provides clear RL gradie
 
 ## Pillar 5: Test Case Generation & Coverage
 
-The taxonomy has 35 leaf failure types. The MVP covers 10 of them (29%) across 5 hand-authored scenarios. The question is how to scale from 29% to 80%+ without hand-authoring hundreds of YAML files.
+The taxonomy has 35 leaf failure types. The MVP covers 18 of them (51%) across 5 hand-authored scenarios + 241 Aiops-Dataset faults + 64 crawled incidents.
 
 ### Question 1: From Indexed Incidents to Reproducible Test Cases
 
 **The implemented pipeline (3 stages):**
 
 ```
-Stage 1: Crawl              Stage 2: Generate           Stage 3: Play
-─────────────               ─────────────               ──────────────
-
-VOID (~10K incidents)──┐
-Aiops-Dataset (labeled)┤    ScenarioGenerator           SREEnvironment
-GCP/Cloudflare feeds ──┤──► .generate(incident) ──► scenario.yaml ──► episode
-GitHub post-mortems  ──┘    │                           │
-                            ├── pick topology           ├── perturbation per seed
-                            ├── build timeline          ├── telemetry generation
-                            ├── estimate difficulty     └── reward computation
-                            └── set gold standard
+Aiops-Dataset (241 faults)─┐
+GCP/Cloudflare/GitHub    ──┤──► ScenarioGenerator ──► scenario.yaml ──► SREEnvironment
+(261 crawled incidents)  ──┘    (topology + timeline     (perturbation per seed
+                                 + gold standard)         + telemetry generation)
 ```
 
 **Stage 1: Crawl and normalise.** Three crawlers (`GCPIncidentCrawler`, `CloudflareIncidentCrawler`, `GitHubPostmortemCrawler`) fetch real incidents from public APIs and normalise them into `NormalisedIncident` objects stored in SQLite (261 incidents, 288 KB). Additionally, `load_aiops_groundtruth()` reads the Aiops-Dataset groundtruth CSV — 241 labeled fault scenarios from a real 46-instance microservice system, included in the repo at `data/groundtruth-all.csv` (16 KB). Each incident has: title, summary, taxonomy labels, quality score.
@@ -570,44 +467,14 @@ make finetune       # GRPO fine-tuning (dry run without GPU)
 
 ---
 
-## Mapping to open-sre-agent Pipeline
+## opensre Integration (Verified End-to-End)
 
-The environment is designed to mirror the open-sre-agent's existing LangGraph investigation pipeline. Each environment action corresponds to a stage or tool in the production agent:
-
-| RL Environment Action | open-sre-agent Pipeline Stage | AgentState Fields |
-|----------------------|------------------------------|-------------------|
-| Initial alert observation | `extract_alert` node | `alert_data`, `alert_name`, `severity` |
-| `LIST_SERVICES` | `resolve_integrations` node | `integrations`, `evidence_sources` |
-| `QUERY_METRICS` / `QUERY_LOGS` / `QUERY_TRACES` | `investigate` node (tool actions) | `evidence`, `executed_hypotheses` |
-| `LIST_ALERTS` | Alert context from Slack/PagerDuty | `slack_context`, `alert_data` |
-| `DIAGNOSE` | `root_cause_diagnosis` node | `root_cause`, `root_cause_category`, `validated_claims` |
-| `REMEDIATE` | `publish_findings` node | `remediation_steps` |
-| Episode loop (investigate → diagnose → repeat) | `route_investigation_loop` (max 5 iterations) | `total_loops`, `investigation_recommendations` |
-
-This mapping means an RL-trained policy can be transferred to the production agent by replacing the LLM's prompt-driven decision-making in `plan_actions` and `root_cause_diagnosis` with the learned policy — the tool interface is the same.
+A custom LangGraph graph replaces opensre's `plan_actions` and `investigate` nodes with simulated versions that use our environment. Action names match opensre's `EVIDENCE_MAPPERS` (`query_grafana_*`). Verified: opensre's LLM investigated a simulated scenario, planned 4 tool calls across 3 loops, and correctly diagnosed the root cause with 100% validity.
 
 ---
 
 ## MVP Scope vs. Deferred
 
-### MVP (Part 3 Implementation)
-- **Synthetic telemetry generator** for Layer 1 simulation — correlated metrics, logs, and traces that tell a consistent causal story
-- **Gymnasium RL environment** with defined observation/action/reward spaces
-- **5 scenario templates** covering distinct failure classes (disk full, connection pool, memory leak, cascading failure, DNS failure)
-- **Scenario perturbation** — each seed produces ±15% timing jitter and ±20% magnitude variation, preventing memorisation
-- **Evaluation harness** with hierarchical reward scoring (4 components: diagnosis × efficiency, remediation, safety)
-- **Three baseline agents** (random, heuristic, oracle) demonstrating the reward signal discriminates correctly
-- **Incident data crawler** for GCP, Cloudflare, and GitHub post-mortems (Pillar 1)
-- **Crawler→scenario pipeline** that converts crawled incidents into playable YAML scenarios (Pillar 5)
-- **Tool adapter** (`SREToolAdapter`) exposing the environment as callable tools for LLM agents, compatible with Claude tool_use and the open-sre-agent tool interface
-- **Training loop** (`EpisodeRunner`) with scenario sampling, curriculum support via difficulty filtering, and trajectory collection
-- **Docker Compose** setup with demo, crawler, tests, and training services
-- **149 passing tests** across all components
+**Built:** Telemetry generator, Gymnasium environment, 5 builtin + 241 Aiops-Dataset scenarios, 4-component reward, 3 baseline agents, crawlers, scenario generator, opensre integration (custom LangGraph), Q-learning agent, training loop with EDA/accuracy matrix/eval, trajectory export, sim-to-real validation, Docker, CI. 161 tests.
 
-### Deferred
-- Layer 2/3 simulation (real services, Kubernetes, Chaos Mesh)
-- LLM-as-judge evaluation (requires LLM API integration)
-- Milestone rewards and counterfactual evaluation (designed above, not implemented)
-- Automatic curriculum progression based on agent performance (difficulty filtering is supported but not auto-adaptive)
-- Full LangGraph integration with open-sre-agent's AgentState TypedDict (tool interface is compatible; wiring is deferred)
-- Distributed training infrastructure
+**Deferred:** Layer 2/3 real infrastructure, LLM-as-judge, milestone rewards, automatic curriculum, distributed training.

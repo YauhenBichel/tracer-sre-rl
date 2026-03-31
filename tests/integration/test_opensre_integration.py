@@ -271,7 +271,12 @@ def test_full_integration_flow():
     actions_by_name = {a.name: a for a in actions}
 
     # 3. Simulate execute_actions flow: check availability → extract params → call function
-    for action_name in ["query_grafana_alert_rules", "query_grafana_service_names", "query_grafana_metrics", "query_grafana_logs"]:
+    for action_name in [
+        "query_grafana_alert_rules",
+        "query_grafana_service_names",
+        "query_grafana_metrics",
+        "query_grafana_logs",
+    ]:
         action = actions_by_name[action_name]
         assert action.availability_check(sources)
         kwargs = action.parameter_extractor(sources)

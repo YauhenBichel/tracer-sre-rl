@@ -15,7 +15,7 @@ I built all four — not to show breadth, but because **none of them solves the 
 - An RL environment without real incident data trains on made-up scenarios
 - An evaluation harness without an environment has nothing to evaluate
 
-The novel contribution is the **pipeline that connects them**: real incidents from VOID → auto-generated scenarios → synthetic telemetry → RL environment → multi-dimensional reward → trajectory export for LLM fine-tuning → opensre integration. Each component exists to serve this pipeline.
+The novel contribution is the **pipeline that connects them**: real incidents from crawled incidents → auto-generated scenarios → synthetic telemetry → RL environment → multi-dimensional reward → trajectory export for LLM fine-tuning → opensre integration. Each component exists to serve this pipeline.
 
 ## What I Targeted: The Reward Signal
 
@@ -35,7 +35,7 @@ All four are validated in the baseline comparison (random: 0.321, heuristic: 0.4
 
 **What:** Three API crawlers + one CSV loader that fetch real incident data, plus a scenario generator that converts them into playable RL episodes.
 
-**Why:** Hand-authoring YAML scenarios doesn't scale (5 scenarios = 29% taxonomy coverage). Real incidents provide ground-truth failure patterns. The Aiops-Dataset groundtruth CSV (241 labeled faults from a 46-instance microservice system) is included in the repo at `data/groundtruth-all.csv` (16 KB). The crawlers fetch 261 more incidents from public APIs.
+**Why:** Hand-authoring YAML scenarios doesn't scale. Real incidents provide ground-truth failure patterns. The Aiops-Dataset groundtruth CSV (241 labeled faults) is included in the repo at `data/groundtruth-all.csv` (16 KB). The crawlers fetch 261 more incidents from public APIs. Combined: 18/35 taxonomy leaves (51%) covered.
 
 **How the training data is generated:**
 1. `run_crawler.py` runs 3 crawlers (GCP, Cloudflare, GitHub) → 261 incidents → `data/incidents.db` (SQLite)
@@ -85,7 +85,7 @@ Scenario perturbation (`perturb_scenario()`) jitters timing ±15% and magnitudes
 
 **What:** Multi-dimensional reward function with hierarchical partial credit.
 
-**Why:** This is the hard part. A binary reward (right/wrong) can't capture the richness of SRE investigation. The VOID database shows only 25% of incidents have a single definitive root cause. The reward must handle ambiguity, partial correctness, and the interaction between investigation thoroughness and speed.
+**Why:** This is the hard part. A binary reward (right/wrong) can't capture the richness of SRE investigation. The incident data shows only 25% of incidents have a single definitive root cause. The reward must handle ambiguity, partial correctness, and the interaction between investigation thoroughness and speed.
 
 **How:** Four scorers compose the reward:
 - `DiagnosisScorer` — hierarchical taxonomy matching. Exact match: 1.0. Right subcategory, wrong leaf: 0.7. Right category: 0.4. Wrong: 0.0. Supports multiple gold-standard root causes with relevance weights.
@@ -238,11 +238,10 @@ See `.github/workflows/ci.yml`.
 - Reward signal discriminates clearly (2.7× gap between oracle and random)
 - opensre integration verified against actual `execute_actions` pipeline
 - Event-correlated telemetry (logs match active events, not random errors)
-- 149 passing tests, all README steps verified to run
+- 161 passing tests, all README steps verified to run
 
 **What doesn't work yet:**
 - No actual RL policy update — trajectories are collected and exported, but GRPO/PPO training requires a GPU cluster and trl/DeepSpeed (outside MVP scope)
 - Log metric values are approximate, not numerically identical to metric time-series (log says "active=97", metric says "avg=72")
-- 5 hand-authored scenarios cover only 29% of the taxonomy — the VOID pipeline can generate more, but hasn't been run at scale yet
-- The VOID crawler assumes a public API that may require a data partnership to access
-- No empirical validation of sim-to-real transfer — whether synthetic-trained agents work on real Grafana dashboards is the biggest open question
+- 18/35 taxonomy leaves covered (51%) — more crawlers and data sources can expand coverage
+- Sim-to-real gap measured (cpu_percent vs java_lang_OperatingSystem_SystemCpuLoad) but not closed

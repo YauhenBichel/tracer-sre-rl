@@ -174,8 +174,7 @@ def create_simulated_actions(adapter: SREToolAdapter) -> list[SimulatedAction]:
     ]
 
 
-# Format functions match opensre's EVIDENCE_MAPPERS expectations.
-# See: app/agent/nodes/investigate/processing/post_process.py
+# Format functions match opensre EVIDENCE_MAPPERS (defined in opensre post_process module).
 
 
 def _format_grafana_alerts(tool_result) -> dict[str, Any]:

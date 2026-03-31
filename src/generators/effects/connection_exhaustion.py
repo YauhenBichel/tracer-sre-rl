@@ -10,6 +10,7 @@ DEFAULT_MAX_CONNECTIONS = 100
 
 class ConnectionExhaustionEffect(EventEffectHandler):
     """Applies connection exhaustion effects to metrics during active events."""
+
     def apply(self, base_value, metric_name, service, event, progress):
         if METRIC_CONNECTION in metric_name:
             max_conn = service.config.get("max_connections", DEFAULT_MAX_CONNECTIONS)

@@ -4,21 +4,23 @@
 
 ### The RL Training Loop for Coding Agents
 
-Modern software engineering agents are trained through reinforcement learning loops that follow a standard Markov Decision Process (MDP) structure. The architecture has converged across leading systems [1, 2, 3]:
+The architecture has converged across SWE-bench [1], SWE-RL [2], DeepSWE [3], and Codex [4]. I studied these systems to understand which patterns transfer to SRE and which break.
 
-**Environment.** A sandboxed Docker container containing a repository snapshot checked out at a specific commit. The container includes all dependencies, build tools, and test suites pre-installed. Each training episode corresponds to one task instance — typically a real GitHub issue paired with the repository state before the fix was merged [1].
+**Environment.** A Docker container with a repository snapshot at a specific commit, pre-installed with dependencies and tests. Each episode = one GitHub issue. The key property: the environment is fully deterministic — same code + same tests = same result, every time. This is what makes RL tractable for coding. For SRE, we don't have this: same deployment can fail or succeed depending on load and timing.
 
-**Observations.** The agent observes: (1) the issue description or bug report, (2) current file contents it has opened, (3) terminal output from commands it has executed, and (4) its conversation history. The observation space is text — a sequence of tokens representing the workspace state.
+**Observations.** Text-based: issue description, file contents, terminal output, conversation history. The agent reads and writes files, runs commands, and sees results. This is directly analogous to SRE investigation — the agent reads metrics dashboards, log queries, and trace visualisations. Our environment mirrors this by returning text observations from tool queries (metrics tables, log entries, trace summaries).
 
-**Actions.** The agent selects from a discrete set of tool invocations: execute a bash command, search files, read a file, edit a file, or submit a patch. Each action transforms the environment state. This tool-based action space is shared across SWE-bench [1], Codex [4], and Claude Code.
+**Actions.** Tool invocations: bash commands, file edits, searches, patch submission. The agent decides what to do, not what to output. This is the pattern we adopted — opensre's `plan_actions` node decides which tools to call (`query_grafana_metrics`, `query_grafana_logs`), and our simulated environment returns the results.
 
-**Reward Signal.** The reward is typically binary and sparse — delivered only at the end of an episode. The submitted patch is applied, then the "fail-to-pass" test suite is executed. If all previously-failing tests pass without regressions, reward is 1; otherwise 0. SWE-RL introduced a continuous reward variant based on patch similarity (difflib.SequenceMatcher) to provide gradient signal for partial solutions [2].
+**Reward.** Binary and sparse: tests pass (1) or fail (0), delivered at episode end. SWE-RL [2] introduced continuous reward via patch similarity to provide gradient signal for partial solutions. This is where SRE diverges most — there's no test suite to run. We address this with hierarchical partial credit (right category = 0.4, right subcategory = 0.7, exact match = 1.0) and multi-dimensional scoring (diagnosis, efficiency, remediation, safety).
 
-**Training loop.** The procedure is: (1) sample a task instance, (2) spin up a containerised environment, (3) run the agent policy for up to N steps or a time budget, (4) collect the trajectory, (5) compute reward via test execution, (6) update the policy. DeepSWE uses GRPO (Group Relative Policy Optimisation) across 4,500+ tasks on 64 H100 GPUs for 6 days [3].
+**Training loop.** Sample task → spin up environment → agent acts → collect trajectory → compute reward → update policy. DeepSWE [3] ran this across 4,500 tasks on 64 H100s for 6 days using GRPO. Our loop is the same structure but faster: synthetic telemetry at 38ms/episode vs Docker sandboxes at seconds/episode.
 
 ### Infrastructure at Scale
 
-Training requires a decoupled architecture: GPU clusters for LLM inference and CPU clusters for sandbox execution (1,000+ cores running isolated Docker containers). These communicate asynchronously — agentic workloads are I/O-bound (waiting for sandbox execution), not GPU-bound. Kubernetes orchestrates container lifecycle, with Docker images built in layers to minimise provisioning time. The ARES evaluation framework can evaluate all of SWE-bench Verified (~500 instances) in approximately 20 minutes using this architecture [5].
+Training requires separating LLM inference (GPU-bound) from environment execution (CPU-bound). DeepSWE [3] used 64 H100 GPUs for inference and separate CPU workers running Docker sandboxes across 4,500 tasks over 6 days. The bottleneck is LLM inference latency (~200ms per step), not sandbox execution (~50ms per episode). Environment throughput scales linearly with GPU count; cheaper CPU workers handle sandbox orchestration independently.
+
+For SRE environments, the infrastructure is simpler: synthetic telemetry generation needs only CPU (~38ms per episode in our implementation), so the GPU cost is entirely LLM inference. A single A100 can serve ~1,800 episodes/hour when the agent uses 10 steps per episode at 200ms/step.
 
 ### Test Case Generation and Curation
 
@@ -26,7 +28,7 @@ Training requires a decoupled architecture: GPU clusters for LLM inference and C
 
 **Self-play** (Meta's SSR, 2025) eliminates the data bottleneck: one LLM injects bugs, another fixes them, generating unlimited training pairs from any codebase [7]. **R2E-Gym** procedurally generates 8,100+ tasks from commits without requiring human-written PRs [8].
 
-For distributed systems, equivalent datasets are emerging. The VOID database [14] contains ~10,000 real incidents from ~590 organisations. The Aiops-Dataset [22] provides labeled fault scenarios (log/metric/trace triplets) from a 46-instance microservice system with ground-truth root causes. LogHub [19] offers 300M+ log lines from HDFS, BGL, Thunderbird, and OpenStack with anomaly labels. Microsoft's AIOpsLab [18] deploys real microservices with fault injection and telemetry export, enabling benchmarking of autonomous AIOps agents. LitmusChaos ChaosHub [21] catalogs 50+ fault experiments for Kubernetes. These resources collectively address the data scarcity problem for SRE agent training.
+For distributed systems, equivalent datasets are emerging: VOID [14] (~10K incidents), Aiops-Dataset [22] (labeled microservice faults), LogHub [19] (300M+ log lines), AIOpsLab [18] (real microservice benchmarks), and LitmusChaos [21] (50+ K8s fault experiments). Our MVP uses Aiops-Dataset groundtruth (241 labeled faults, included in the repo) and 3 live crawlers (GCP, Cloudflare, GitHub).
 
 ### Why the Reward Signal is Tractable — and Why It Breaks
 
@@ -90,19 +92,15 @@ The fundamental asymmetry: coding has cheap, fast, deterministic verification. D
 
 ### 5. Environment Cost
 
-**The constraint.** A Docker container for a coding task costs pennies and provisions in seconds. Simulating a production-fidelity distributed system costs dollars per episode and takes minutes to provision. Running 100,000 episodes (a modest RL training run) with full Docker Compose infrastructure would cost approximately $10,000 and take weeks.
+**The constraint.** A Docker container for a coding task costs pennies. Simulating a production-fidelity distributed system costs dollars per episode. 100,000 episodes at full fidelity = ~$10,000 and weeks of compute.
 
-**Why it changes RL design.** Full-fidelity training at scale is prohibitive. But low-fidelity risks teaching behaviours that don't transfer to production.
-
-**Architectural implication.** A multi-layer simulation strategy, following the fidelity spectrum proposed by chaos engineering literature [16]: Layer 1 (synthetic telemetry, ~$0.001/episode, 1,000+ episodes/hour) for bulk RL training on investigation strategy; Layer 2 (Docker Compose with fault injection or Microsoft AIOpsLab [18], ~$0.10/episode) for validating that learned policies transfer to real services; Layer 3 (Kubernetes + Chaos Mesh [17] + LitmusChaos [21], ~$5/episode) for final evaluation against production-fidelity failure modes. RCAEval [20] and MicroServo [23] provide standardised benchmarks for comparing agent performance across these layers.
+**Why it changes RL design.** Full-fidelity training at scale is prohibitive. This forces a multi-layer strategy: cheap synthetic telemetry (~$0.001/episode) for bulk training, real infrastructure (AIOpsLab [18], ~$0.10/episode) for transfer validation. See Part 2, Pillar 3.
 
 ### 6. Safety
 
-**The constraint.** An SRE agent that takes remediation actions in training must not cause real damage — but a purely simulated environment may not teach production-relevant safety constraints. In production, the cost of a wrong action (e.g., restarting a primary database during a failover) can be catastrophic. Conversely, an agent that never acts is useless.
+**The constraint.** An SRE agent that takes remediation actions in training must not cause real damage. Restarting a primary database during a failover is catastrophic. But an agent that never acts is useless.
 
-**Why it changes RL design.** The agent must learn a safety policy alongside investigation. Restarting a service is riskier than reading a log; the environment must penalise high-risk actions taken without sufficient evidence.
-
-**Architectural implication.** The action space includes safety metadata (risk level, reversibility). The reward function includes a safety penalty that penalises hasty diagnosis (diagnosing before querying sufficient telemetry) and tunnel vision (only investigating one service). The environment supports a "dry-run" mode where the agent proposes but does not execute remediation — matching open-sre-agent's production behaviour where remediation steps are suggested to the human operator, not executed autonomously [9].
+**Why it changes RL design.** The reward must penalise reckless actions (hasty diagnosis, tunnel vision) while rewarding decisive investigation. Our safety scorer penalises diagnosing before querying ≥2 sources and querying fewer than 2 services. The environment uses "dry-run" mode — matching opensre's production behaviour where remediations are proposed, not executed [9].
 
 ---
 
