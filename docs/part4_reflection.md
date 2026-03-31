@@ -35,7 +35,7 @@ The RL environment exposes the same tool interface as opensre's production pipel
 | **opensre integration** | SimulatedAction matching InvestigationAction interface | 5/5 actions pass through real execute_actions |
 | **Training loop** | EpisodeRunner with trajectory collection + JSONL/DPO export | Curriculum support via difficulty filtering |
 | **3 baseline agents** | Random, heuristic (no known correct answers), oracle | Validates reward discrimination |
-| **169 tests** | Unit + integration + end-to-end | 3.2 seconds, all passing |
+| **169 tests** | Unit + integration + end-to-end | ~8 seconds, all passing |
 
 ### Baseline Agent Results (Measured)
 

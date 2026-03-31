@@ -157,7 +157,7 @@ Measured on Apple M-series laptop, single core:
 | **Full episode (random agent)** | 29ms per episode | Includes generation + 5-15 agent steps + reward computation. |
 | **Memory per episode** | 2.5MB | Telemetry held in memory (tuples of frozen dataclasses). No accumulation across episodes. |
 | **Throughput** | 120,000 episodes/hour | Single CPU core, random agent. With LLM agent (~200ms/step × 10 steps), drops to ~1,800 eps/hr per GPU. |
-| **Test suite** | 169 tests in 3.1 seconds | Full coverage of all components. |
+| **Test suite** | 169 tests in ~8 seconds | Full coverage of all components. |
 
 ### At Scale (100K training episodes)
 
@@ -187,7 +187,7 @@ git clone <repo-url>
 cd tracer-sre-rl
 pip install -r requirements.txt
 
-# Run tests (169 tests, ~3 seconds)
+# Run tests (169 tests, ~8 seconds)
 python -m pytest tests/ -v
 
 # Run baseline comparison (3 agents × 5 scenarios)

@@ -13,15 +13,23 @@ Or step by step: `make install` → `make test` → `make check-reward`
 
 ## What You Can Do
 
-| Command | What it does | Time |
-|---------|-------------|------|
-| `make check-reward` | Verify the reward function scores agents correctly | 2s |
-| `make train` | Run training episodes and show accuracy per failure type | 10s |
-| `make export` | Save training trajectories to a file for LLM fine-tuning | 10s |
-| `make finetune` | Run LLM fine-tuning on saved trajectories (preview without GPU) | 2s |
-| `make crawl` | Fetch real incidents from GCP, Cloudflare, and GitHub | 30s |
-| `make test` | Run all tests | 6s |
-| `make help` | Show all commands | instant |
+| Command | What it does | Verified |
+|---------|-------------|----------|
+| `make check-reward` | Verify reward function scores agents correctly | ✅ Oracle 0.875 |
+| `make train` | Run training episodes and show accuracy per failure type | ✅ Generalisation good |
+| `make export` | Save training trajectories for LLM fine-tuning | ✅ 100 trajectories |
+| `make finetune` | Run LLM fine-tuning on saved trajectories (preview without GPU) | ✅ Dry run |
+| `make crawl` | Fetch real incidents from GCP, Cloudflare, and GitHub | ✅ 265 incidents |
+| `make test` | Run all 169 tests | ✅ 169 passed |
+| `make help` | Show all commands | ✅ |
+
+All commands also work in Docker:
+
+```bash
+docker compose run --rm check-reward   # ✅ Oracle 0.875
+docker compose run --rm test           # ✅ 169 passed
+docker compose run --rm train          # ✅ Generalisation good
+```
 
 ## Configure Training
 
@@ -202,6 +210,7 @@ tracer-sre-rl/
 | [Part 3: Implementation](docs/part3_implementation.md) | MVP walkthrough, compute estimates |
 | [Part 4: Reflection](docs/part4_reflection.md) | Results, limitations, open questions |
 | [Data Sources](docs/data_sources.md) | Training data pipeline, available datasets |
+| [opensre Integration](docs/opensre_integration.md) | Custom LangGraph graph, verified end-to-end |
 
 ---
 

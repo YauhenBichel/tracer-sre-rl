@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 
-from .crawlers import (
+from app.incidents import (
     CloudflareIncidentCrawler,
     GCPIncidentCrawler,
     GitHubPostmortemCrawler,
     IncidentCrawler,
 )
+
 from .repository import IncidentRepository, SqliteIncidentRepository
 
 logger = logging.getLogger(__name__)

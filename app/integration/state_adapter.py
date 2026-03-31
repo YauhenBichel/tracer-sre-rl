@@ -184,23 +184,68 @@ def score_agent_state(state: dict[str, Any], scenario: ScenarioDefinition) -> di
     }
 
 
+_SYNONYM_MAP = {
+    "disk_full": ["disk usage", "disk full", "disk space", "no space", "out of disk"],
+    "connection_pool": ["connection pool", "too many connections", "max connections", "connection exhaust"],
+    "memory": ["memory", "oom", "out of memory", "heap"],
+    "leak": ["leak", "growing steadily", "increasing over time"],
+    "cpu_saturation": ["cpu", "cpu usage", "cpu saturation", "high load"],
+    "dns": ["dns", "name resolution", "resolve"],
+    "cascading_failure": ["cascading", "cascade", "downstream", "circuit breaker"],
+    "upstream_timeout": ["timeout", "upstream", "slow dependency"],
+    "partition": ["network partition", "unreachable", "connectivity"],
+    "container_crash": ["crash", "restart", "crashloop", "oom kill"],
+    "replication_lag": ["replication", "replica lag", "sync delay"],
+    "iops_throttling": ["iops", "throttl", "disk i/o", "io wait"],
+    "resource_exhaustion": ["resource exhaust", "exhaustion", "saturation"],
+}
+
+
+def _match_by_label_parts(text: str, scenario: ScenarioDefinition) -> str | None:
+    """Match by checking if taxonomy label parts appear in the text."""
+    for gold in scenario.gold_root_causes:
+        if any(part.replace("_", " ") in text for part in gold.taxonomy_label.split(".")):
+            return gold.taxonomy_label
+    return None
+
+
+def _match_by_synonyms(text: str, scenario: ScenarioDefinition) -> str | None:
+    """Match using synonym expansion (e.g., 'disk usage' matches 'disk_full')."""
+    for gold in scenario.gold_root_causes:
+        leaf = gold.taxonomy_label.split(".")[-1]
+        if any(syn in text for syn in _SYNONYM_MAP.get(leaf, [])):
+            return gold.taxonomy_label
+    return None
+
+
+def _match_by_category(category: str, scenario: ScenarioDefinition) -> str | None:
+    """Match the LLM's category string against taxonomy labels."""
+    cat_lower = category.lower()
+    for gold in scenario.gold_root_causes:
+        if cat_lower in gold.taxonomy_label.lower():
+            return gold.taxonomy_label
+    for leaf, synonyms in _SYNONYM_MAP.items():
+        if any(syn in cat_lower for syn in synonyms):
+            for gold in scenario.gold_root_causes:
+                if leaf in gold.taxonomy_label:
+                    return gold.taxonomy_label
+    return None
+
+
 def _map_root_cause_to_label(root_cause: str, category: str, scenario: ScenarioDefinition) -> str:
     """Map the agent's free-text root cause to a taxonomy label."""
     if not root_cause:
         return ""
 
-    root_cause_lower = root_cause.lower()
-    for gold in scenario.gold_root_causes:
-        label_parts = gold.taxonomy_label.split(".")
-        if any(part.replace("_", " ") in root_cause_lower for part in label_parts):
-            return gold.taxonomy_label
+    text = (root_cause + " " + category).lower()
 
-    if category:
-        for gold in scenario.gold_root_causes:
-            if category.lower() in gold.taxonomy_label.lower():
-                return gold.taxonomy_label
-
-    return category or ""
+    return (
+        _match_by_label_parts(text, scenario)
+        or _match_by_synonyms(text, scenario)
+        or (category and _match_by_category(category, scenario))
+        or category
+        or ""
+    )
 
 
 def _map_remediation(steps: list[str], scenario: ScenarioDefinition) -> str:
