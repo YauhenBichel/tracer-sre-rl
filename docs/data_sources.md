@@ -16,7 +16,7 @@ ScenarioGenerator.batch_generate()
   → converts each incident to a ScenarioDefinition
   → picks topology template (5 options by failure category)
   → builds event timeline (8 templates by failure type)
-  → sets gold-standard root causes from taxonomy labels
+  → sets correct root causes from taxonomy labels
         │
         ▼
 SREEnvironment (per episode)

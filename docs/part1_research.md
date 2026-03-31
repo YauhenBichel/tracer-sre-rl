@@ -24,13 +24,13 @@ For SRE environments, the infrastructure is simpler: synthetic telemetry generat
 
 ### Test Case Generation and Curation
 
-**SWE-bench** [1] (the gold standard) mines real GitHub PRs: snapshot the repository at the pre-PR commit, extract the linked issue, and use the "fail-to-pass" tests as the evaluation oracle. SWE-bench Verified added human validation by 93 developers to remove ambiguous tasks [6].
+**SWE-bench** [1] (the correct answers) mines real GitHub PRs: snapshot the repository at the pre-PR commit, extract the linked issue, and use the "fail-to-pass" tests as the evaluation oracle. SWE-bench Verified added human validation by 93 developers to remove ambiguous tasks [6].
 
 **Self-play** (Meta's SSR, 2025) eliminates the data bottleneck: one LLM injects bugs, another fixes them, generating unlimited training pairs from any codebase [7]. **R2E-Gym** procedurally generates 8,100+ tasks from commits without requiring human-written PRs [8].
 
 For distributed systems, equivalent datasets are emerging: VOID [14] (~10K incidents), Aiops-Dataset [22] (labeled microservice faults), LogHub [19] (300M+ log lines), AIOpsLab [18] (real microservice benchmarks), and LitmusChaos [21] (50+ K8s fault experiments). Our MVP uses Aiops-Dataset groundtruth (241 labeled faults, included in the repo) and 3 live crawlers (GCP, Cloudflare, GitHub).
 
-### Why the Reward Signal is Tractable — and Why It Breaks
+### Why the Reward Signal Works — and Why It Breaks
 
 For coding agents, the reward signal works because of five properties:
 
@@ -88,7 +88,7 @@ The core problem: coding has cheap, fast, deterministic verification. Distribute
 
 **Why it changes RL design.** A binary reward cannot capture the richness of incident resolution. You need a multi-dimensional reward scoring root cause accuracy, investigation efficiency, remediation quality, and safety. Each dimension may have multiple valid answers.
 
-**Architectural implication.** Reward design must use a hierarchical scoring model with partial credit: coarse credit for the right service layer, finer credit for the exact component. Gold-standard diagnoses should include all acceptable root causes ranked by relevance. LLM-as-judge can scale human judgment at reduced cost [15]. Our MVP implements this via hierarchical taxonomy matching with configurable depth scores.
+**Architectural implication.** Reward design must use a hierarchical scoring model with partial credit: coarse credit for the right service layer, finer credit for the exact component. Correct diagnoses should include all acceptable root causes ranked by relevance. LLM-as-judge can scale human judgment at reduced cost [15]. Our MVP implements this via hierarchical taxonomy matching with configurable depth scores.
 
 ### 5. Environment Cost
 

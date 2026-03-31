@@ -27,19 +27,13 @@ Or step by step: `make install` → `make test` → `make check-reward`
 
 Edit `config/training.yaml` — no code changes needed:
 
-```yaml
-sources:
-  builtin_scenarios: scenarios/                   # 5 hand-authored scenarios
-  aiops_groundtruth: data/groundtruth-all.csv     # 241 real faults (in repo)
-  # incident_db: data/incidents.db                # uncomment after: make crawl
-
-episodes: 100
-max_difficulty: null          # null = all, 0.4 = easy only
-eval_episodes: 20             # held-out evaluation episodes
-
-agent:
-  type: random                # random | heuristic | oracle
-```
+| Setting | What it controls | Default |
+|---------|-----------------|---------|
+| `sources.builtin_scenarios` | Hand-authored failure scenarios | `scenarios/` |
+| `sources.aiops_groundtruth` | Real faults from Aiops-Dataset (241 incidents) | `data/groundtruth-all.csv` |
+| `sources.incident_db` | Crawled incidents (uncomment after `make crawl`) | disabled |
+| `episodes` | Number of training episodes | 100 |
+| `agent.type` | Test agent: `random`, `heuristic`, or `oracle` | `random` |
 
 Then: `make train`
 

@@ -16,7 +16,7 @@ For coding agents, the reward is workable (tests pass or fail). For distributed 
 
 - **Hierarchical partial credit** (0.0 → 0.4 → 0.7 → 1.0 by taxonomy depth) provides learning signal for partially correct diagnoses, instead of binary right/wrong.
 - **Efficiency × diagnosis coupling** prevents the broken strategy where the agent diagnoses immediately without investigating (fast + wrong = 0 efficiency).
-- **Multi-label gold standard** with relevance weights handles incidents with multiple valid root causes (which the incident data shows is ~75% of real incidents).
+- **Multi-label correct answers** with relevance weights handles incidents with multiple valid root causes (which the incident data shows is ~75% of real incidents).
 
 **3. Tool-based investigation, not flat text.**
 
@@ -133,7 +133,7 @@ These were only discovered by reading opensre's actual source code (`execute_act
 
 **1. Sim-to-real transfer.** The agent trains on synthetic telemetry with metric names like `cpu_percent` and `latency_p99_ms`. Real Grafana dashboards use `node_cpu_seconds_total` and `http_request_duration_seconds_bucket`. Real logs are 10x noisier with irrelevant entries. Will investigation skills trained on clean synthetic data transfer to messy production telemetry? This is the biggest risk. The fastest validation would be: train on synthetic, evaluate on Aiops-Dataset's real log/metric/trace data, measure the performance gap.
 
-**2. Reward for novel root causes.** The current reward requires gold-standard labels. But real incidents have novel root causes the scenario designer didn't anticipate. An agent that discovers a valid root cause not in the gold standard currently gets 0. Options: (a) LLM-as-judge to evaluate novel diagnoses semantically, (b) a "confidence calibration" reward where the agent is scored on how well its confidence matches its accuracy, (c) accept the limitation and rely on taxonomy coverage breadth to approximate.
+**2. Reward for novel root causes.** The current reward requires correct labels. But real incidents have novel root causes the scenario designer didn't anticipate. An agent that discovers a valid root cause not in the correct answers currently gets 0. Options: (a) LLM-as-judge to evaluate novel diagnoses semantically, (b) a "confidence calibration" reward where the agent is scored on how well its confidence matches its accuracy, (c) accept the limitation and rely on taxonomy coverage breadth to approximate.
 
 **3. Does RL training actually improve open-sre-agent?** The environment and reward signal are necessary but not sufficient. The final test is: does an RL-tuned opensre agent diagnose faster and more accurately than the current prompt-engineered version? This requires: (a) a benchmark of 50+ real incidents with known root causes, (b) running both agents, (c) comparing MTTR and diagnosis accuracy. This is a product validation, not a research question.
 
