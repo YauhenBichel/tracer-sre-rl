@@ -217,3 +217,13 @@ tracer-sre-rl/
 [1] bbyldebb, "Aiops-Dataset," 2022. https://github.com/bbyldebb/Aiops-Dataset
 
 Built with Claude Code. Python 3.11+. 169 tests. Deterministic per seed.
+
+---
+
+## Contributors
+
+Thank you to everyone who has helped this project. Your code, reviews, issues, and pull requests are appreciated.
+
+- [@YauhenBichel](https://github.com/YauhenBichel)
+
+See the [full contributor graph](https://github.com/YauhenBichel/tracer-sre-rl/graphs/contributors).
